@@ -1,6 +1,8 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using UPMSF.Server.Data;
 using UPMSF.Server.Services;
@@ -10,8 +12,13 @@ namespace UPMSF.Server.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting("auth")]   // SECURITY (S2): per-IP throttle on register/login
 public class AuthController : ControllerBase
 {
+    // SECURITY (S1): registration code alphabet — crypto-random, unambiguous (no 0/O/1/I).
+    // The code is the login secret, so it must be high-entropy, not a predictable sequence.
+    private static readonly char[] CodeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray();
+
     private readonly AppDbContext _db;
     private readonly JwtTokenService _jwt;
     public AuthController(AppDbContext db, JwtTokenService jwt) { _db = db; _jwt = jwt; }
@@ -22,16 +29,13 @@ public class AuthController : ControllerBase
         if (!await _db.Districts.AnyAsync(d => d.Id == req.DistrictId))
             return BadRequest(new { message = "Invalid district." });
 
-        // One account per phone number.
+        // One account per phone number (friendly pre-check; the DB unique index is the
+        // real guard against the check-then-insert race — see the catch below).
         if (await _db.Applicants.AnyAsync(a => a.Phone == req.Phone))
             return Conflict(new { message = "This phone number is already registered. Please login." });
 
-        // Atomic next number from the SQL sequence -> AH9 + value (e.g. AH91000003).
-        var registrationId = $"AH9{await NextRegistrationSeqAsync()}";
-
         var applicant = new Applicant
         {
-            RegistrationId = registrationId,
             ApplicantType = req.ApplicantType,
             SocietyName = req.SocietyName.Trim(),
             ProposedInstituteName = req.ProposedInstituteName.Trim(),
@@ -42,18 +46,46 @@ public class AuthController : ControllerBase
             Phone = req.Phone,
             Mobile = req.Mobile,
             Email = req.Email.Trim(),
-            CodeHash = PasswordHasher.Hash(registrationId),
             CreatedAtUtc = DateTime.UtcNow
         };
         _db.Applicants.Add(applicant);
-        await _db.SaveChangesAsync();
 
-        return Ok(new RegisterResponse
+        // Generate a high-entropy registration code; the unique index enforces uniqueness.
+        // Retry on the (astronomically unlikely) code collision; surface a phone-race as 409.
+        for (var attempt = 1; ; attempt++)
         {
-            RegistrationId = registrationId,
-            Phone = applicant.Phone,
-            Message = "Registration successful. Please note your Registration Code — you will use it with your phone number to login."
-        });
+            var registrationId = NewRegistrationId();
+            applicant.RegistrationId = registrationId;
+            applicant.CodeHash = PasswordHasher.Hash(registrationId);
+            try
+            {
+                await _db.SaveChangesAsync();
+                return Ok(new RegisterResponse
+                {
+                    RegistrationId = registrationId,
+                    Phone = applicant.Phone,
+                    Message = "Registration successful. Please note your Registration Code — you will use it with your phone number to login."
+                });
+            }
+            catch (DbUpdateException) when (attempt < 5)
+            {
+                // Phone uniqueness lost a race -> friendly conflict. Otherwise treat as a
+                // registration-code collision and retry with a fresh code.
+                if (await _db.Applicants.AnyAsync(a => a.Phone == req.Phone && a.Id != applicant.Id))
+                    return Conflict(new { message = "This phone number is already registered. Please login." });
+            }
+        }
+    }
+
+    /// <summary>Crypto-random registration code: AH9 + 8 unambiguous chars (~40 bits).</summary>
+    private static string NewRegistrationId()
+    {
+        Span<byte> bytes = stackalloc byte[8];
+        RandomNumberGenerator.Fill(bytes);
+        var chars = new char[8];
+        for (var i = 0; i < chars.Length; i++)
+            chars[i] = CodeAlphabet[bytes[i] % CodeAlphabet.Length];
+        return "AH9" + new string(chars);
     }
 
     [Authorize]
@@ -81,24 +113,6 @@ public class AuthController : ControllerBase
             Email = a.Email,
             CreatedAtUtc = a.CreatedAtUtc
         };
-    }
-
-    /// <summary>Atomically fetch the next registration number from the SQL sequence.</summary>
-    private async Task<int> NextRegistrationSeqAsync()
-    {
-        var conn = _db.Database.GetDbConnection();
-        var wasClosed = conn.State != System.Data.ConnectionState.Open;
-        if (wasClosed) await conn.OpenAsync();
-        try
-        {
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT NEXT VALUE FOR RegistrationSeq";
-            return Convert.ToInt32(await cmd.ExecuteScalarAsync());
-        }
-        finally
-        {
-            if (wasClosed) await conn.CloseAsync();
-        }
     }
 
     [HttpPost("login")]

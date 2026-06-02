@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using UPMSF.Server.Data;
+using UPMSF.Server.Services;
 using UPMSF.Shared;
 
 namespace UPMSF.Server.Controllers;
@@ -15,8 +16,10 @@ public partial class ApplicationsController : ControllerBase
     private readonly AppDbContext _db;
     public ApplicationsController(AppDbContext db) => _db = db;
 
+    // C4: a missing/garbage principal becomes 401 (via the global handler), not a 500.
     private int ApplicantId =>
-        int.Parse(User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        int.TryParse(User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)
+            ? id : throw new UnauthorizedAppException();
 
     // ---------------------------------------------------------------- list
     [HttpGet]
@@ -114,7 +117,16 @@ public partial class ApplicationsController : ControllerBase
         }
 
         _db.Applications.Add(app);
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // D2: two concurrent creates for the same applicant can collide on the unique
+            // ApplicationNumber. Return a clean 409 instead of a raw 500 — the client retries.
+            return Conflict(new { message = "Could not create the application due to a concurrent request. Please try again." });
+        }
 
         return Ok(new CreateApplicationResponse { Id = app.Id, ApplicationNumber = app.ApplicationNumber });
     }

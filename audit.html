@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UPMSF — Code Audit Report</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#30363d;
+    --text:#e6edf3; --muted:#9aa7b4; --accent:#58a6ff;
+    --crit:#f85149; --high:#ff8c42; --med:#e3b341; --low:#3fb950; --ok:#2ea043;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1040px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:30px;margin:0 0 4px}
+  h2{font-size:22px;margin:38px 0 14px;padding-bottom:8px;border-bottom:2px solid var(--border)}
+  h3{font-size:17px;margin:22px 0 6px}
+  .sub{color:var(--muted);margin:0 0 24px}
+  code{background:#0a0d12;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font:13px ui-monospace,SFMono-Regular,Consolas,monospace;color:#ffa657}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:20px 0}
+  .score{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+  .score .n{font-size:30px;font-weight:700}
+  .score .l{color:var(--muted);font-size:13px;margin-top:4px}
+  .issue{background:var(--panel);border:1px solid var(--border);border-left-width:4px;border-radius:8px;padding:16px 18px;margin:14px 0}
+  .issue.crit{border-left-color:var(--crit)} .issue.high{border-left-color:var(--high)}
+  .issue.med{border-left-color:var(--med)} .issue.low{border-left-color:var(--low)}
+  .badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.5px;padding:2px 9px;border-radius:20px;vertical-align:middle;margin-left:8px}
+  .b-crit{background:rgba(248,81,73,.18);color:var(--crit)} .b-high{background:rgba(255,140,66,.18);color:var(--high)}
+  .b-med{background:rgba(227,179,65,.18);color:var(--med)} .b-low{background:rgba(63,185,80,.18);color:var(--low)}
+  .b-fixed{background:rgba(46,160,67,.2);color:#3fb950;border:1px solid #2ea043}
+  .b-noted{background:rgba(88,166,255,.15);color:var(--accent);border:1px solid var(--accent)}
+  .issue h3{margin-top:0}
+  .issue p{margin:6px 0}
+  .issue .lbl{color:var(--muted);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.3px}
+  .pill{font-size:12px;padding:2px 8px;border-radius:6px;background:var(--panel2);border:1px solid var(--border);color:var(--muted)}
+  table{width:100%;border-collapse:collapse;margin:14px 0}
+  th,td{border:1px solid var(--border);padding:9px 12px;text-align:left}
+  th{background:var(--panel2)}
+  .summary{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px 22px;margin:16px 0}
+  .summary ol{margin:6px 0 0;padding-left:22px}
+  .verdict{background:linear-gradient(135deg,rgba(248,81,73,.12),rgba(255,140,66,.06));border:1px solid var(--high);border-radius:10px;padding:20px 24px;margin:20px 0}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0 0;font-size:13px;color:var(--muted)}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  hr{border:none;border-top:1px solid var(--border);margin:30px 0}
+  .good{color:#3fb950}
+  .meta{font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>UPMSF — Code Audit Report</h1>
+  <p class="sub">New College Opening / Seat Enhancement portal · Blazor WASM + ASP.NET Core 8 + SQL Server (EF Core)<br>
+  <span class="meta">Senior-engineer review · scope: full codebase (Server / Client / Shared, 9 entities, 4 controllers, 3 services, EF model, Docker)</span></p>
+
+  <div class="legend">
+    <span><span class="dot" style="background:var(--crit)"></span>Critical</span>
+    <span><span class="dot" style="background:var(--high)"></span>High</span>
+    <span><span class="dot" style="background:var(--med)"></span>Medium</span>
+    <span><span class="dot" style="background:var(--low)"></span>Low</span>
+    <span><span class="badge b-fixed">FIXED</span> applied in this pass</span>
+    <span><span class="badge b-noted">NOTED</span> documented, deferred (flow/scope risk)</span>
+  </div>
+
+  <h2>Scorecard</h2>
+  <div class="grid">
+    <div class="score"><div class="n" style="color:var(--med)">6.5</div><div class="l">Architecture</div></div>
+    <div class="score"><div class="n" style="color:var(--med)">5.5</div><div class="l">Backend</div></div>
+    <div class="score"><div class="n" style="color:var(--med)">6.0</div><div class="l">Database</div></div>
+    <div class="score"><div class="n" style="color:var(--crit)">3.0</div><div class="l">Security (pre-fix)</div></div>
+    <div class="score"><div class="n" style="color:var(--med)">5.0</div><div class="l">Scalability</div></div>
+    <div class="score"><div class="n" style="color:var(--med)">6.5</div><div class="l">Maintainability</div></div>
+  </div>
+  <p class="meta">Security rises to ~6.5 after the fixes applied in this pass (rate-limiting, fail-fast key, high-entropy code, file content validation, locked CORS). Residual <code>S1</code> design issue keeps it from higher — see below.</p>
+
+  <h2>🔴 Security</h2>
+
+  <div class="issue crit">
+    <h3>S1 — Login secret = sequential, public RegistrationId <span class="badge b-crit">CRITICAL</span> <span class="badge b-fixed">PARTIAL FIX</span></h3>
+    <p><span class="lbl">What</span> Login = <code>Phone + RegistrationId</code>; the registration code <em>is</em> the password (<a href="src/UPMSF.Server/Controllers/AuthController.cs#L45">AuthController.cs:45,110</a>). It was generated from a SQL sequence starting <code>1000001</code> incrementing by 1 — fully predictable (<code>AH91000001, AH91000002…</code>).</p>
+    <p><span class="lbl">Why bad</span> The "secret" was guessable and is also the public identifier (embedded in application numbers <code>AH9…-N</code> and the JWT <code>rid</code> claim). PBKDF2 hashing of a low-entropy public value is security theater.</p>
+    <p><span class="lbl">Prod risk</span> Attacker with a target phone (or any leaked application number) enumerates the small code range → account takeover → access to institutional & financial documents.</p>
+    <p><span class="lbl">Fix applied</span> Registration code is now <strong>high-entropy random</strong> (<code>AH9</code> + 8 crypto-random base32 chars). This kills practical enumeration while keeping the exact login flow (Phone + code) unchanged. <span class="lbl">Residual (NOTED)</span> The code still doubles as the public application-number prefix, so a leaked application number still reveals the credential. The real fix (separate the public identifier from the login secret, or add OTP/2FA) changes the product flow and needs a product decision — deferred deliberately.</p>
+  </div>
+
+  <div class="issue high">
+    <h3>S2 — No rate limiting / lockout on auth <span class="badge b-high">HIGH</span> <span class="badge b-fixed">FIXED</span></h3>
+    <p><span class="lbl">What</span> <code>login</code>/<code>register</code> had no throttle.</p>
+    <p><span class="lbl">Why bad</span> Combined with S1 → brute force & mass enumeration trivial; register spam bloats the DB.</p>
+    <p><span class="lbl">Prod risk</span> Credential stuffing, enumeration, DoS.</p>
+    <p><span class="lbl">Fix applied</span> ASP.NET fixed-window <code>RateLimiter</code> — a generous <em>"auth"</em> policy (per-IP) on <code>/api/auth/*</code>. Normal users unaffected; automated abuse gets <code>429</code>.</p>
+  </div>
+
+  <div class="issue high">
+    <h3>S3 — JWT key silently falls back to hardcoded dev key <span class="badge b-high">HIGH</span> <span class="badge b-fixed">FIXED</span></h3>
+    <p><span class="lbl">What</span> If <code>Jwt__Key</code> was unset the app ran with a public dev key (<a href="src/UPMSF.Server/Program.cs#L17">Program.cs</a>).</p>
+    <p><span class="lbl">Why bad</span> A prod misconfig wouldn't crash — it would sign tokens with a known key → anyone can forge a valid JWT for any account.</p>
+    <p><span class="lbl">Fix applied</span> In <strong>Production</strong> the app now <strong>fails fast</strong> if the key is missing or &lt;32 chars. Development keeps the convenience fallback, so local runs are unaffected.</p>
+  </div>
+
+  <div class="issue med">
+    <h3>S4 — CORS default = allow any origin <span class="badge b-med">MEDIUM</span> <span class="badge b-fixed">FIXED</span></h3>
+    <p><span class="lbl">What</span> With <code>Cors:Origins</code> unset the policy allowed every origin, header, method.</p>
+    <p><span class="lbl">Fix applied</span> Permissive only in Development. In Production, cross-origin is allowed solely for configured <code>Cors__Origins</code>; with none set, no cross-origin is permitted (the hosted client is same-origin, so the normal deployment is unaffected).</p>
+  </div>
+
+  <div class="issue med">
+    <h3>S5 — File upload trusts filename extension &amp; client content-type <span class="badge b-med">MEDIUM</span> <span class="badge b-fixed">FIXED</span></h3>
+    <p><span class="lbl">What</span> Only the filename extension was checked (<a href="src/UPMSF.Server/Controllers/ApplicationsController.Steps.cs#L27">Steps.cs:27</a>); the client-supplied content-type was stored and re-served, PDFs inline.</p>
+    <p><span class="lbl">Why bad</span> Anything could be uploaded as <code>.pdf</code>; inline serving + client MIME = content-sniffing / stored-XSS surface.</p>
+    <p><span class="lbl">Fix applied</span> Magic-byte sniffing (PDF <code>%PDF</code>, ZIP <code>PK</code>) rejects mismatched content; content-type is now server-derived (not client-trusted); downloads send <code>X-Content-Type-Options: nosniff</code> and default to attachment for non-PDF. <span class="lbl">Note</span> AV scanning (ClamAV) still recommended for a public deployment.</p>
+  </div>
+
+  <div class="issue low">
+    <h3>S6 — No server-side token revocation <span class="badge b-low">LOW-MED</span> <span class="badge b-noted">NOTED</span></h3>
+    <p>Stateless JWT, 12h expiry, logout only clears the client. A leaked token stays valid until expiry. A real fix (refresh-token + revocation list) trades away the stateless/horizontally-scalable property the design relies on — deferred as a design decision.</p>
+  </div>
+
+  <p class="good">✔ Good: EF parameterizes all queries (no SQL injection — the one raw query has no user input); PBKDF2 100k iterations + timing-safe compare; per-request ownership checks; Swagger gated to Development.</p>
+
+  <h2>🟠 Database Layer</h2>
+
+  <div class="issue high">
+    <h3>D1 — Phone uniqueness race (no unique index) <span class="badge b-high">HIGH</span> <span class="badge b-fixed">FIXED</span></h3>
+    <p><span class="lbl">What</span> Register did a <code>AnyAsync(Phone==)</code> check then insert; Phone had only a non-unique composite index.</p>
+    <p><span class="lbl">Why bad</span> Two concurrent registrations with the same phone both pass the check and insert → duplicate accounts → ambiguous login.</p>
+    <p><span class="lbl">Fix applied</span> Added a <strong>unique index on <code>Phone</code></strong> (EF migration <code>AddPhoneUniqueIndexAndHardening</code>) and catch the unique-violation → friendly <code>409</code> instead of a 500.</p>
+  </div>
+
+  <div class="issue med">
+    <h3>D2 — ApplicationNumber generation race → unhandled 500 <span class="badge b-med">MEDIUM</span> <span class="badge b-fixed">FIXED</span></h3>
+    <p><span class="lbl">What</span> <code>ApplicationSequence += 1</code> then build <code>AH9…-N</code> (<a href="src/UPMSF.Server/Controllers/ApplicationsController.cs#L82">ApplicationsController.cs:82</a>); two concurrent creates collide on the unique <code>ApplicationNumber</code>.</p>
+    <p><span class="lbl">Fix applied</span> Create now catches <code>DbUpdateException</code> and returns a clean <code>409</code> asking the user to retry, instead of a raw 500.</p>
+  </div>
+
+  <div class="issue med">
+    <h3>D4 — EF concurrency exception never handled <span class="badge b-med">MEDIUM</span> <span class="badge b-fixed">FIXED</span></h3>
+    <p><span class="lbl">What</span> <code>Application.RowVersion</code> is a <code>[Timestamp]</code>; EF throws <code>DbUpdateConcurrencyException</code> on a conflicting save, uncaught anywhere.</p>
+    <p><span class="lbl">Fix applied</span> The new global exception handler maps concurrency/update conflicts to <code>409</code> with a reload-and-retry message.</p>
+  </div>
+
+  <div class="issue low">
+    <h3>D5 — Static lookups hit the DB on every request <span class="badge b-low">LOW-MED</span> <span class="badge b-fixed">FIXED</span></h3>
+    <p><span class="lbl">What</span> Districts / Councils / Courses are static but were queried every call.</p>
+    <p><span class="lbl">Fix applied</span> Wrapped in <code>IMemoryCache</code> (24h). No behavior change — the data never mutates at runtime.</p>
+  </div>
+
+  <div class="issue med">
+    <h3>D3 — Auto-migrate on every startup → multi-instance race <span class="badge b-med">MEDIUM</span> <span class="badge b-noted">NOTED</span></h3>
+    <p>Every instance runs <code>Migrate()</code> at boot (<a href="src/UPMSF.Server/Program.cs#L59">Program.cs:59</a>). Fine single-node; on the README's claimed horizontal scale-out, concurrent migrations race. Proper fix = a dedicated migration step in CI/CD. Left as-is because the whole one-command deploy currently relies on startup auto-migrate — changing it is a deployment-process decision, not a code bug.</p>
+  </div>
+
+  <div class="issue high">
+    <h3>D6 — SQL Server <em>Express</em> vs ~400-user claim <span class="badge b-med">MEDIUM-HIGH</span> <span class="badge b-noted">NOTED</span></h3>
+    <p><code>docker-compose.yml</code> uses <code>MSSQL_PID: Express</code> (1 GB RAM, ~10 GB DB cap). Won't sustain the stated load. Move to Standard / managed (Azure SQL) for production. Infra/licensing choice — not changed here.</p>
+  </div>
+
+  <p class="good">✔ Good: registration numbers from an atomic SQL sequence; <code>EnableRetryOnFailure</code>; FK columns auto-indexed; explicit decimal precision; one <code>SaveChanges</code> per operation = implicit transaction.</p>
+
+  <h2>🟡 API &amp; Backend</h2>
+
+  <div class="issue med">
+    <h3>A2 — No global exception handler <span class="badge b-med">MEDIUM</span> <span class="badge b-fixed">FIXED</span></h3>
+    <p><span class="lbl">What</span> Unhandled exceptions (DB conflicts, claim parse) surfaced as raw 500s.</p>
+    <p><span class="lbl">Fix applied</span> Added <code>UseExceptionHandler</code> middleware that returns the same <code>{ message }</code> shape the client already understands (concurrency/unique → 409, else 500) and logs the error — no client-side parsing change.</p>
+  </div>
+
+  <div class="issue low">
+    <h3>C4 — <code>ApplicantId</code> parse could 500 instead of 401 <span class="badge b-low">LOW</span> <span class="badge b-fixed">FIXED</span></h3>
+    <p><code>int.Parse(...!)</code> on a missing/garbage claim threw (<a href="src/UPMSF.Server/Controllers/ApplicationsController.cs#L18">ApplicationsController.cs:18</a>). Now <code>TryParse</code> → <code>401</code> via a typed unauthorized exception.</p>
+  </div>
+
+  <div class="issue high">
+    <h3>A3 — Mock payment always succeeds <span class="badge b-high">HIGH</span> <span class="badge b-noted">NOTED</span></h3>
+    <p>Intentional placeholder (<a href="src/UPMSF.Server/Controllers/ApplicationsController.Steps.cs#L125">Steps.cs:125</a>). Real-money production blocker — replace <code>Pay()</code> with a real gateway. Left intentional per the project's own README note.</p>
+  </div>
+
+  <div class="issue med">
+    <h3>A1 — Inconsistent error response shape <span class="badge b-med">MEDIUM</span> <span class="badge b-noted">NOTED</span></h3>
+    <p>Custom errors use <code>{ message }</code>; <code>[ApiController]</code> auto-validation returns <code>ValidationProblemDetails</code>. The client already tolerates both. Unifying everything to ProblemDetails would change the 400 contract and risk the client's error display — deferred to avoid breaking the working flow.</p>
+  </div>
+
+  <div class="issue low">
+    <h3>A4 / A5 — No health check / observability; no client retry policy <span class="badge b-low">LOW-MED</span> <span class="badge b-noted">NOTED</span></h3>
+    <p>Add <code>/health</code> + structured logging server-side and Polly retry/timeout client-side. Additive, low risk — recommended next.</p>
+  </div>
+
+  <h2>🟢 Architecture &amp; Code Quality</h2>
+
+  <div class="issue med">
+    <h3>C3 — Hardcoded fee magic numbers <span class="badge b-med">LOW-MED</span> <span class="badge b-fixed">FIXED</span></h3>
+    <p><code>400000m</code> / <code>18m</code> lived in the controller and DTO. Centralized into a single <code>FeeRules</code> constant set (same values) so the fee is defined once.</p>
+  </div>
+
+  <div class="issue med">
+    <h3>C1 — Fat controllers, no service layer <span class="badge b-med">MEDIUM</span> <span class="badge b-noted">NOTED</span></h3>
+    <p>Business logic (short-form detection, snapshot-copy, state transitions) sits in controllers (<a href="src/UPMSF.Server/Controllers/ApplicationsController.cs#L62">ApplicationsController.cs:62-114</a>) → hard to unit-test, SRP violation. Extracting an <code>ApplicationService</code> is the right move but a large refactor that touches the whole working flow — deferred to keep this pass safe.</p>
+  </div>
+
+  <div class="issue med">
+    <h3>C2 — Heavy duplication (Part1/Part2 mapping ×3) <span class="badge b-med">MEDIUM</span> <span class="badge b-noted">NOTED</span></h3>
+    <p>Field-by-field copy repeats in <code>Map</code>, <code>SavePart1/2</code>, and <code>CopyPart1/2</code>. Adding a field means editing 3-4 places. Consolidating mapping is recommended but large-surface; deferred this pass.</p>
+  </div>
+
+  <div class="issue low">
+    <h3>C5 — Short-form shares the same physical file path <span class="badge b-low">LOW</span> <span class="badge b-noted">NOTED</span></h3>
+    <p><code>CopyDocument</code> reuses <code>StoredPath</code> (<a href="src/UPMSF.Server/Controllers/ApplicationsController.cs#L382">ApplicationsController.cs:382</a>). Latent: a future delete on one app could break another. No deletion path exists today — documented for when one is added.</p>
+  </div>
+
+  <p class="good">✔ Good: clean 3-project split with shared DTOs; proper DI; hosted-Blazor single deployable; readable, well-commented, consistent naming.</p>
+
+  <h2>🧪 Testing</h2>
+  <div class="issue high">
+    <h3>No tests at all <span class="badge b-high">HIGH</span> <span class="badge b-noted">NOTED</span></h3>
+    <p>No unit / integration / E2E / regression tests, no coverage, no static-analysis config. The biggest production-confidence gap alongside S1. <code>NextRegistrationSeqAsync</code> uses raw SQL, so integration tests need SQLite/Testcontainers rather than the InMemory provider. Recommend bootstrapping a test project next (this pass was verified manually end-to-end instead).</p>
+  </div>
+
+  <h2>Summary</h2>
+
+  <div class="summary">
+    <strong>Top Critical Issues</strong>
+    <ol>
+      <li>S1 — predictable/public login credential (enumeration fixed; design residual noted)</li>
+      <li>S3 — JWT dev-key fallback (fixed: fail-fast in prod)</li>
+      <li>A3 — mock payment (intentional; prod blocker)</li>
+      <li>No automated tests</li>
+    </ol>
+  </div>
+  <div class="summary">
+    <strong>Top Security Risks (post-fix status)</strong>
+    <ol>
+      <li>S1 credential design — <span class="good">enumeration closed</span>, identifier/secret coupling remains</li>
+      <li>S2 brute force — <span class="good">fixed</span> (rate limiter)</li>
+      <li>S3 key forgery — <span class="good">fixed</span></li>
+      <li>S5 file upload — <span class="good">fixed</span> (content validation)</li>
+      <li>S4 CORS — <span class="good">fixed</span> (prod lockdown)</li>
+    </ol>
+  </div>
+  <div class="summary">
+    <strong>Top Performance Issues</strong>
+    <ol>
+      <li>SQL Express vs load claim (D6 — noted)</li>
+      <li>Lookup caching (D5 — fixed)</li>
+      <li>Startup-migrate race on scale-out (D3 — noted)</li>
+    </ol>
+  </div>
+  <div class="summary">
+    <strong>Top Refactoring Suggestions</strong>
+    <ol>
+      <li>Extract a service/repository layer (C1) for thin, testable controllers</li>
+      <li>De-duplicate Part1/Part2 mapping &amp; validation (C2)</li>
+      <li>Add a test project (unit + integration via Testcontainers)</li>
+      <li>Unify on a single ProblemDetails error contract (A1)</li>
+      <li>Real payment gateway + health checks + structured logging</li>
+    </ol>
+  </div>
+
+  <div class="verdict">
+    <strong>Production Readiness: NOT READY — improved.</strong>
+    <p style="margin:8px 0 0">Functionally complete with clean code and a sound architectural base. This pass closed the practical security holes (enumeration, brute force, key forgery, file-content trust, open CORS) and the database integrity/robustness gaps (phone-unique, create race, concurrency, exception handling) <em>without changing the working flow</em>. Remaining blockers before a real production launch: the S1 credential <em>design</em> (identifier ≠ secret / add 2FA), a real payment gateway, an automated test suite, and SQL Standard/managed for the stated load. Current state: a solid, now-hardened MVP suitable for staging.</p>
+  </div>
+
+  <p class="meta">Report generated as part of the audit + fix pass. File locations are clickable relative paths from the repo root.</p>
+
+</div>
+</body>
+</html>

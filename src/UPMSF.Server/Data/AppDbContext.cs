@@ -26,7 +26,9 @@ public class AppDbContext : DbContext
         b.Entity<Applicant>(e =>
         {
             e.HasIndex(x => x.RegistrationId).IsUnique();
-            e.HasIndex(x => new { x.Phone, x.RegistrationId });
+            // D1: one account per phone — enforced at the DB level (guards the
+            // check-then-insert race in registration). Also serves the login lookup.
+            e.HasIndex(x => x.Phone).IsUnique();
         });
 
         b.Entity<Application>(e =>

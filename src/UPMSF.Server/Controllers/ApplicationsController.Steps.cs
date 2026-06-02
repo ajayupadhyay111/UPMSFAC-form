@@ -11,6 +11,25 @@ public partial class ApplicationsController
     /// <summary>Document slots that must be present before leaving the Documents step.</summary>
     private static readonly DocumentType[] RequiredDocuments = Enum.GetValues<DocumentType>();
 
+    /// <summary>SECURITY (S5): confirm the uploaded bytes actually match the claimed type
+    /// (PDF starts with "%PDF", ZIP with "PK"), so a renamed file can't slip through.</summary>
+    private static async Task<bool> HasValidSignatureAsync(IFormFile file, string expected, CancellationToken ct)
+    {
+        await using var s = file.OpenReadStream();
+        var header = new byte[4];
+        var read = await s.ReadAsync(header.AsMemory(0, 4), ct);
+        if (read < 4) return false;
+        return expected switch
+        {
+            // %PDF
+            "pdf" => header[0] == 0x25 && header[1] == 0x50 && header[2] == 0x44 && header[3] == 0x46,
+            // PK\x03\x04 (normal), PK\x05\x06 (empty), PK\x07\x08 (spanned)
+            "zip" => header[0] == 0x50 && header[1] == 0x4B &&
+                     (header[2] == 0x03 || header[2] == 0x05 || header[2] == 0x07),
+            _ => false
+        };
+    }
+
     // ---------------------------------------------------------------- Step 4: upload a document
     [HttpPost("{id:int}/documents/{docType}")]
     [RequestSizeLimit(DocumentRules.MaxFileSizeBytes + 1024)]
@@ -29,6 +48,13 @@ public partial class ApplicationsController
         if (ext != expected)
             return BadRequest(new { message = $"This slot requires a .{expected} file." });
 
+        // SECURITY (S5): verify the actual bytes, not just the filename extension.
+        if (!await HasValidSignatureAsync(file, expected, ct))
+            return BadRequest(new { message = $"The file is not a valid .{expected} file." });
+
+        // SECURITY (S5): derive the content type on the server — never trust the client's.
+        var contentType = expected == "pdf" ? "application/pdf" : "application/zip";
+
         var path = await storage.SaveAsync(app.ApplicationNumber, docType.ToString(), expected, file.OpenReadStream(), ct);
 
         var existing = app.Documents.FirstOrDefault(d => d.DocumentType == docType);
@@ -37,7 +63,7 @@ public partial class ApplicationsController
             if (existing.StoredPath != path) storage.Delete(existing.StoredPath);
             existing.OriginalFileName = file.FileName;
             existing.StoredPath = path;
-            existing.ContentType = file.ContentType;
+            existing.ContentType = contentType;
             existing.SizeBytes = file.Length;
             existing.UploadedAtUtc = DateTime.UtcNow;
         }
@@ -49,7 +75,7 @@ public partial class ApplicationsController
                 DocumentType = docType,
                 OriginalFileName = file.FileName,
                 StoredPath = path,
-                ContentType = file.ContentType,
+                ContentType = contentType,
                 SizeBytes = file.Length,
                 UploadedAtUtc = DateTime.UtcNow
             });
@@ -77,6 +103,8 @@ public partial class ApplicationsController
 
         var contentType = string.IsNullOrEmpty(doc.ContentType) ? "application/octet-stream" : doc.ContentType;
         var stream = new FileStream(doc.StoredPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        // SECURITY (S5): stop browsers from MIME-sniffing the response into something executable.
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
         // PDFs open inline (in a browser tab); other types download.
         return File(stream, contentType, fileDownloadName: contentType == "application/pdf" ? null : doc.OriginalFileName);
     }
@@ -94,14 +122,14 @@ public partial class ApplicationsController
         if (missing.Count > 0)
             return BadRequest(new { message = "Please upload all required documents.", missing });
 
-        // create the payment record (Step 5)
+        // create the payment record (Step 5) — fee from the single FeeRules source (C3)
         app.Payment ??= new Payment
         {
             ApplicationId = app.Id,
-            BaseFee = 400000m,
-            GstPercent = 18m,
-            GstAmount = Math.Round(400000m * 0.18m, 2),
-            TotalAmount = 400000m + Math.Round(400000m * 0.18m, 2),
+            BaseFee = FeeRules.BaseFee,
+            GstPercent = FeeRules.GstPercent,
+            GstAmount = FeeRules.GstAmount,
+            TotalAmount = FeeRules.TotalAmount,
             Status = PaymentStatus.Pending
         };
         app.CurrentStep = ApplicationStep.Payment;

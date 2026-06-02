@@ -140,10 +140,19 @@ public class FormPart2Dto
 }
 
 // ============================ Step 5 : Payment ============================
+/// <summary>Single source of truth for the application fee (C3 — was hardcoded in the controller).</summary>
+public static class FeeRules
+{
+    public const decimal BaseFee = 400000m;
+    public const decimal GstPercent = 18m;
+    public static decimal GstAmount => Math.Round(BaseFee * GstPercent / 100m, 2);
+    public static decimal TotalAmount => BaseFee + GstAmount;
+}
+
 public class PaymentDto
 {
-    public decimal BaseFee { get; set; } = 400000m;
-    public decimal GstPercent { get; set; } = 18m;
+    public decimal BaseFee { get; set; } = FeeRules.BaseFee;
+    public decimal GstPercent { get; set; } = FeeRules.GstPercent;
     public decimal GstAmount => Math.Round(BaseFee * GstPercent / 100m, 2);
     public decimal TotalAmount => BaseFee + GstAmount;
     public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
