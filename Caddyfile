@@ -1,8 +1,12 @@
-# This is for your HOST Caddy (e.g. /etc/caddy/Caddyfile), NOT a container.
-# Replace yourdomain.com with your real domain, then: sudo systemctl reload caddy
+# Used by the `caddy` container in docker-compose.yml (mounted at /etc/caddy/Caddyfile).
+# DOMAIN + LETSENCRYPT_EMAIL come from .env — no need to edit this file.
 # Caddy fetches/renews the HTTPS certificate automatically.
 
-yourdomain.com, www.yourdomain.com {
-    encode gzip
-    reverse_proxy 127.0.0.1:8080
+{
+	email {$LETSENCRYPT_EMAIL}
+}
+
+{$DOMAIN}, www.{$DOMAIN} {
+	encode gzip
+	reverse_proxy app:8080
 }

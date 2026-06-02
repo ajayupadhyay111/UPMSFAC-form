@@ -1,11 +1,10 @@
-# UPMSF — runs on a VPS that already has Caddy + Docker on the host.
-#   db  : SQL Server 2022 (Express)
-#   app : ASP.NET Core API + Blazor WASM client (single container), exposed on 127.0.0.1:8080
-#
-# Your host Caddy then forwards your domain -> 127.0.0.1:8080 (see Caddyfile).
+# UPMSF — full stack on one VPS, single command. Automatic HTTPS via Caddy container.
+#   db    : SQL Server 2022 (Express)
+#   app   : ASP.NET Core API + Blazor WASM client (single container)
+#   caddy : reverse proxy + automatic HTTPS (Let's Encrypt) for your domain
 #
 # Usage:
-#   1) cp .env.example .env   &&  edit DB_PASSWORD, JWT_KEY
+#   1) cp .env.example .env   &&  edit DB_PASSWORD, JWT_KEY, DOMAIN, LETSENCRYPT_EMAIL
 #   2) docker compose up -d --build
 
 services:
@@ -28,12 +27,30 @@ services:
       FileStorage__Root: "/data/uploads"
     volumes:
       - uploads:/data/uploads
-    ports:
-      - "127.0.0.1:8080:8080"   # only the host (Caddy) can reach it
+    expose:
+      - "8080"            # internal only — reached by caddy over the docker network
     depends_on:
       - db
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: "${DOMAIN}"
+      LETSENCRYPT_EMAIL: "${LETSENCRYPT_EMAIL}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
     restart: unless-stopped
 
 volumes:
   mssql-data:
   uploads:
+  caddy-data:
+  caddy-config:

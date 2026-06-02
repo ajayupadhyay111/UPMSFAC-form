@@ -46,23 +46,17 @@ cd /opt/upmsf
 ```
 
 ## 5. Configure secrets + domain
+Everything lives in `.env` — no need to touch `Caddyfile`.
 ```bash
 cp .env.example .env
-nano .env        # set a strong DB_PASSWORD and a long random JWT_KEY
-                 # tip: openssl rand -base64 48   (for JWT_KEY)
-
-nano Caddyfile   # replace yourdomain.com / www.yourdomain.com with your real domain
+nano .env        # set:
+                 #   DB_PASSWORD       strong password
+                 #   JWT_KEY           long random secret  (openssl rand -base64 48)
+                 #   DOMAIN            yourdomain.com  (no http://)
+                 #   LETSENCRYPT_EMAIL you@example.com
 ```
-(Optional) put a contact email for Let's Encrypt at the top of `Caddyfile`:
-```
-{
-    email you@example.com
-}
-yourdomain.com, www.yourdomain.com {
-    encode gzip
-    reverse_proxy app:8080
-}
-```
+Caddy reads `DOMAIN` + `LETSENCRYPT_EMAIL` from `.env` and serves both `yourdomain.com`
+and `www.yourdomain.com` with an auto-renewing HTTPS certificate. No host Caddy install needed.
 
 ## 6. Launch 🚀
 ```bash
