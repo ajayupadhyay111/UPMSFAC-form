@@ -1,0 +1,109 @@
+@using UPMSF.Client.Pages.Steps
+@implements IDisposable
+@inject ApiClient Api
+@inject LocalizationService Loc
+
+<div class="section-head clickable" @onclick="@(() => _open = !_open)">
+    <span>@Loc["part2_title"]</span>
+    <div class="head-right">
+        @if (State == StepState.Locked) { <span class="lock-badge">🔒 @Loc["locked"]</span> }
+        <span class="chev">@(_open ? "▾" : "▸")</span>
+    </div>
+</div>
+<div class="section-body @(State == StepState.Locked ? "locked" : "")" style="@(_open ? null : "display:none")">
+    @if (State == StepState.Future)
+    {
+        <p class="hint">Complete the previous step to unlock this section.</p>
+    }
+    else
+    {
+        @if (State == StepState.Active) { <p class="english-note">@Loc["english_only_note"]</p> }
+        @if (_error is not null) { <div class="alert-err">@_error</div> }
+
+        <EditForm Model="_model" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <fieldset disabled="@(State != StepState.Active)">
+                <div class="frm-row"><label>@Loc["teaching_land_owner"]</label><InputText @bind-Value="_model.TeachingLandOwnerName" /></div>
+                <div class="frm-row"><label>@Loc["khasra_plot"]</label><InputText @bind-Value="_model.TeachingKhasraPlotNo" /></div>
+                <div class="frm-row"><label>@Loc["land_area"]</label><InputNumber @bind-Value="_model.LandAreaSqft" /></div>
+                <div class="frm-row"><label>@Loc["teaching_built_area"]</label><InputNumber @bind-Value="_model.TeachingBlockBuiltAreaSqft" /></div>
+                <div class="frm-row"><label>@Loc["teaching_fire_reg"]</label><InputText @bind-Value="_model.TeachingFireRegNo" /></div>
+                <div class="frm-row"><label>@Loc["teaching_fire_validity"]</label><InputDate @bind-Value="_model.TeachingFireValidity" /></div>
+
+                <div class="section-head" style="background:#7aa7da;">Hostel</div>
+                <div class="frm-row"><label>@Loc["hostel_built_area"]</label><InputNumber @bind-Value="_model.HostelBlockBuiltAreaSqft" /></div>
+                <div class="frm-row"><label>@Loc["khasra_plot"]</label><InputText @bind-Value="_model.HostelKhasraPlotNo" /></div>
+                <div class="frm-row"><label>@Loc["hostel_fire_reg"]</label><InputText @bind-Value="_model.HostelFireRegNo" /></div>
+                <div class="frm-row"><label>@Loc["hostel_fire_validity"]</label><InputDate @bind-Value="_model.HostelFireValidity" /></div>
+
+                <div class="section-head" style="background:#7aa7da;">Hospital</div>
+                <div class="frm-row"><label>@Loc["hospital_land_owner"]</label><InputText @bind-Value="_model.HospitalLandOwnerName" /></div>
+                <div class="frm-row"><label>@Loc["khasra_plot"]</label><InputText @bind-Value="_model.HospitalKhasraPlotNo" /></div>
+                <div class="frm-row"><label>@Loc["hospital_name"]</label><InputText @bind-Value="_model.HospitalName" /></div>
+                <div class="frm-row"><label>@Loc["hospital_address"]</label><InputTextArea @bind-Value="_model.HospitalAddress" rows="2" /></div>
+                <div class="frm-row"><label>@Loc["hospital_total_beds"]</label><InputNumber @bind-Value="_model.HospitalTotalBeds" /></div>
+                <div class="frm-row"><label>@Loc["hospital_prev_beds"]</label><InputNumber @bind-Value="_model.HospitalBedsAtPreviousApplication" /></div>
+                <div class="frm-row"><label>@Loc["cmo_reg"]</label><InputText @bind-Value="_model.CmoRegNo" /></div>
+                <div class="frm-row"><label>@Loc["cmo_validity"]</label><InputDate @bind-Value="_model.CmoValidity" /></div>
+                <div class="frm-row"><label>@Loc["cmo_bed"]</label><InputNumber @bind-Value="_model.CmoBedCount" /></div>
+                <div class="frm-row"><label>@Loc["pcb_reg"]</label><InputText @bind-Value="_model.PcbRegNo" /></div>
+                <div class="frm-row"><label>@Loc["pcb_validity"]</label><InputDate @bind-Value="_model.PcbValidity" /></div>
+                <div class="frm-row"><label>@Loc["pcb_bed"]</label><InputNumber @bind-Value="_model.PcbBedCount" /></div>
+                <div class="frm-row"><label>@Loc["hospital_fire_reg"]</label><InputText @bind-Value="_model.HospitalFireRegNo" /></div>
+                <div class="frm-row"><label>@Loc["hospital_fire_validity"]</label><InputDate @bind-Value="_model.HospitalFireValidity" /></div>
+                <div class="frm-row">
+                    <label>@Loc["pmjay"]</label>
+                    <div class="radio-line">
+                        <label><input type="radio" name="pmjay" checked="@_model.IsHospitalEmpanelledPmjay"
+                               @onchange="@(() => _model.IsHospitalEmpanelledPmjay = true)" /> @Loc["yes"]</label>
+                        <label><input type="radio" name="pmjay" checked="@(!_model.IsHospitalEmpanelledPmjay)"
+                               @onchange="@(() => _model.IsHospitalEmpanelledPmjay = false)" /> @Loc["no"]</label>
+                    </div>
+                </div>
+
+                <div class="section-head" style="background:#7aa7da;">@Loc["financial_resources"]</div>
+                <div class="frm-row"><label>@Loc["deposit"]</label><InputNumber @bind-Value="_model.Deposit" /></div>
+                <div class="frm-row"><label>@Loc["fixed_assets"]</label><InputNumber @bind-Value="_model.FixedAssetsValue" /></div>
+                <div class="frm-row"><label>@Loc["current_assets"]</label><InputNumber @bind-Value="_model.CurrentAssetsValue" /></div>
+                <div class="frm-row"><label>@Loc["capital_investment"]</label><InputNumber @bind-Value="_model.CapitalInvestment" /></div>
+                <div class="frm-row"><label>@Loc["account_number"]</label><InputText @bind-Value="_model.InstitutionAccountNumber" /></div>
+                <ValidationSummary />
+            </fieldset>
+
+            @if (State == StepState.Active)
+            {
+                <button type="submit" class="btn-step" disabled="@_busy">@(_busy ? "Saving…" : Loc["save_proceed"])</button>
+            }
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter] public int ApplicationId { get; set; }
+    [Parameter] public StepState State { get; set; }
+    [Parameter] public FormPart2Dto? Initial { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private FormPart2Dto _model = new();
+    private string? _error;
+    private bool _busy;
+    private bool _open = true;
+    private StepState _prevState = (StepState)(-1);
+
+    protected override void OnInitialized() => Loc.OnChange += StateHasChanged;
+    protected override void OnParametersSet()
+    {
+        if (Initial is not null) _model = Initial;
+        if (State != _prevState) { _open = State == StepState.Active; _prevState = State; }
+    }
+    public void Dispose() => Loc.OnChange -= StateHasChanged;
+
+    private async Task Save()
+    {
+        _error = null; _busy = true;
+        var res = await Api.SavePart2Async(ApplicationId, _model);
+        _busy = false;
+        if (res.Ok) await OnSaved.InvokeAsync();
+        else _error = res.Error;
+    }
+}

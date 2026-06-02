@@ -1,0 +1,6 @@
+@UPMSF.Server_HostAddress = http://localhost:5098
+
+GET {{UPMSF.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

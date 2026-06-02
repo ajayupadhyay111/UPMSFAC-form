@@ -1,0 +1,60 @@
+@page "/"
+@inject NavigationManager Nav
+@inject AppAuthStateProvider Auth
+@inject FlowService Flow
+
+<PageTitle>New College Opening / Seat Enhancement Application</PageTitle>
+
+<h1 class="page-title">New College Opening / Seat Enhancement Application</h1>
+<div class="breadcrumb-bar">Home&nbsp;&nbsp;/&nbsp;&nbsp;New College Opening / Seat Enhancement Application</div>
+
+<p class="notice-hi">
+    निजी क्षेत्र के अन्तर्गत नर्सिंग पाठ्यक्रमों (ए0एन0एम0 पाठ्यक्रम को छोड़कर) के नये प्रशिक्षण
+    केन्द्र खोलने एवं पूर्व से चल रहे पाठ्यक्रमों में सीट वृद्धि हेतु इच्छुक संस्थायें निर्धारित
+    शुल्क के साथ ऑनलाईन पोर्टल पर आवेदन कर सकती हैं।
+</p>
+<p style="color:#555;text-align:center;margin:.2rem 0 1rem;">
+    <em>Private institutions may apply online to open new nursing/paramedical training centres
+    (excluding A.N.M. course) or to enhance seats in existing courses, with the prescribed fee.</em>
+</p>
+
+<div class="section-head">Get Started</div>
+<div class="section-body">
+    <div class="frm-row" style="grid-template-columns:auto;">
+        <label>Are you Registered on this portal? (For Fresh Applicants)</label>
+        <div class="radio-line">
+            <label><input type="radio" name="reg" checked="@(_registered == false)"
+                   @onchange="@(() => _registered = false)" /> No</label>
+            <label><input type="radio" name="reg" checked="@(_registered == true)"
+                   @onchange="@(() => _registered = true)" /> Yes</label>
+        </div>
+    </div>
+
+    @if (_registered == false)
+    {
+        <p class="hint">New applicant — please register your Society/Trust/Company first.</p>
+        <button class="btn-step" @onclick="@(() => Nav.NavigateTo("register"))">Register Now</button>
+    }
+    else
+    {
+        <p class="hint">Already registered — login with your Phone and Registration Code.</p>
+        <button class="btn-step" @onclick="@(() => Nav.NavigateTo("login"))">Login</button>
+    }
+
+    <ul class="guidance">
+        <li>👉 Click on <strong>Yes</strong> if you have already registered and have a valid Registration Code with your registered Mobile No.; otherwise press <strong>No</strong>.</li>
+        <li>👉 For each request of an individual Course / Seat Enhancement, a fresh application is submitted with the respective details.</li>
+        <li>👉 <strong>Helplines:</strong> Online Payment Query — <a href="mailto:collegeopening@upsmfac.org">collegeopening@upsmfac.org</a>; Phone: +91-8881268880 (Working Days 9.30 AM - 6.00 PM).</li>
+    </ul>
+</div>
+
+@code {
+    private bool? _registered = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await Auth.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+            await Flow.ResumeAsync();   // resume at the saved step (or dashboard)
+    }
+}

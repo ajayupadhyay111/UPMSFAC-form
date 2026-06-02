@@ -1,0 +1,39 @@
+# UPMSF — runs on a VPS that already has Caddy + Docker on the host.
+#   db  : SQL Server 2022 (Express)
+#   app : ASP.NET Core API + Blazor WASM client (single container), exposed on 127.0.0.1:8080
+#
+# Your host Caddy then forwards your domain -> 127.0.0.1:8080 (see Caddyfile).
+#
+# Usage:
+#   1) cp .env.example .env   &&  edit DB_PASSWORD, JWT_KEY
+#   2) docker compose up -d --build
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${DB_PASSWORD}"
+      MSSQL_PID: "Express"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    restart: unless-stopped
+
+  app:
+    build: .
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__Default: "Server=db;Database=UPMSF;User Id=sa;Password=${DB_PASSWORD};TrustServerCertificate=True;Encrypt=False"
+      Jwt__Key: "${JWT_KEY}"
+      FileStorage__Root: "/data/uploads"
+    volumes:
+      - uploads:/data/uploads
+    ports:
+      - "127.0.0.1:8080:8080"   # only the host (Caddy) can reach it
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  mssql-data:
+  uploads:

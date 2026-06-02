@@ -1,0 +1,105 @@
+@using UPMSF.Client.Pages.Steps
+@implements IDisposable
+@inject ApiClient Api
+@inject LocalizationService Loc
+
+<div class="section-head clickable" @onclick="@(() => _open = !_open)">
+    <span>@(NoFee ? Loc["final_submit"] : Loc["payment_title"])</span>
+    <span class="chev">@(_open ? "▾" : "▸")</span>
+</div>
+<div class="section-body" style="@(_open ? null : "display:none")">
+    @if (State == StepState.Future)
+    {
+        <p class="hint">Complete the previous step to unlock this step.</p>
+    }
+    else if (NoFee)
+    {
+        @if (_error is not null) { <div class="alert-err">@_error</div> }
+
+        @if (Submitted)
+        {
+            <div class="alert-ok">🎉 Application submitted. You may track it on your dashboard.</div>
+        }
+        else
+        {
+            <p class="hint">This application reuses your institution details from your first application —
+                <strong>no fee</strong> is required. Please review (Preview) and submit.</p>
+            <button class="btn-step" disabled="@_busy" @onclick="Submit">
+                @(_busy ? "Submitting…" : Loc["final_submit"])
+            </button>
+        }
+    }
+    else
+    {
+        @if (_error is not null) { <div class="alert-err">@_error</div> }
+
+        <div class="frm-row"><label>@Loc["base_fee"]</label><span>₹ @Pay.BaseFee.ToString("N2")</span></div>
+        <div class="frm-row"><label>@Loc["gst"] (@Pay.GstPercent%)</label><span>₹ @Pay.GstAmount.ToString("N2")</span></div>
+        <div class="frm-row"><label><strong>@Loc["total"]</strong></label><span><strong>₹ @Pay.TotalAmount.ToString("N2")</strong></span></div>
+
+        @if (Pay.Status == PaymentStatus.Success)
+        {
+            <div class="alert-ok">
+                ✔ Payment successful. Transaction: <strong>@Pay.TransactionId</strong>
+                (@Pay.PaidAtUtc?.ToLocalTime().ToString("dd/MM/yyyy HH:mm"))
+            </div>
+            @if (!Submitted)
+            {
+                <button class="btn-step" disabled="@_busy" @onclick="Submit">
+                    @(_busy ? "Submitting…" : Loc["final_submit"])
+                </button>
+            }
+            else
+            {
+                <div class="alert-ok">🎉 Application finally submitted. You may track it on your dashboard.</div>
+            }
+        }
+        else
+        {
+            <p class="hint">This is a <strong>mock</strong> payment gateway for demo. Click Pay Now to simulate a successful transaction.</p>
+            <button class="btn-step" disabled="@_busy" @onclick="DoPay">
+                @(_busy ? "Processing…" : Loc["pay_now"])
+            </button>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public int ApplicationId { get; set; }
+    [Parameter] public StepState State { get; set; }
+    [Parameter] public PaymentDto Pay { get; set; } = new();
+    [Parameter] public bool Submitted { get; set; }
+    [Parameter] public bool NoFee { get; set; }   // short (dashboard) applications carry no fee
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback OnSubmitted { get; set; }
+
+    private string? _error;
+    private bool _busy;
+    private bool _open = true;
+    private StepState _prevState = (StepState)(-1);
+
+    protected override void OnInitialized() => Loc.OnChange += StateHasChanged;
+    protected override void OnParametersSet()
+    {
+        if (State != _prevState) { _open = State == StepState.Active; _prevState = State; }
+    }
+    public void Dispose() => Loc.OnChange -= StateHasChanged;
+
+    private async Task DoPay()
+    {
+        _error = null; _busy = true;
+        var res = await Api.PayAsync(ApplicationId);
+        _busy = false;
+        if (res.Ok) { Pay = res.Value!; await OnChanged.InvokeAsync(); }
+        else _error = res.Error;
+    }
+
+    private async Task Submit()
+    {
+        _error = null; _busy = true;
+        var res = await Api.SubmitAsync(ApplicationId);
+        _busy = false;
+        if (res.Ok) await OnSubmitted.InvokeAsync();
+        else _error = res.Error;
+    }
+}

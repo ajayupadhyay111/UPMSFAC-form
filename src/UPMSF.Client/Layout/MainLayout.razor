@@ -1,0 +1,115 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject LocalizationService Loc
+@inject AppAuthStateProvider Auth
+@inject NavigationManager Nav
+
+<div class="upmsf-shell">
+    <!-- top utility bar -->
+    <div class="upmsf-topbar">
+        <span class="clock">⏱ @_now.ToString("dddd, d MMM, yyyy hh:mm:ss tt", System.Globalization.CultureInfo.InvariantCulture).ToUpperInvariant()</span>
+        <span class="top-links">
+            <a href="">🏠</a>
+            <span class="sep">|</span>
+            <a href="" title="Screen Reader Access">SCREEN READER ACCESS</a>
+            <span class="sep">|</span>
+            <a href="" title="Sitemap">SITEMAP</a>
+            <span class="sep">|</span>
+            <a href="javascript:void(0)" @onclick="ToggleLang">@(Loc.Current == Lang.En ? "हिंदी संस्करण" : "English Version")</a>
+        </span>
+    </div>
+
+    <!-- main header -->
+    <header class="upmsf-header">
+        <a class="brand" href="">
+            <img src="img/upsmf-logo.png" alt="Uttar Pradesh State Medical Faculty" class="brand-logo" />
+        </a>
+        <div class="header-info">
+            <div class="info-block">
+                <span class="info-ico">🕑</span>
+                <div>
+                    <div>Monday - Friday (9.30 AM - 6.00 PM)</div>
+                    <div class="muted">Saturday and Sunday - CLOSED</div>
+                </div>
+            </div>
+            <div class="info-block">
+                <span class="info-ico">📞</span>
+                <div>
+                    <div>(0522) 2238846, 2235964, 2235965</div>
+                    <div class="muted">Fax : (0522) 2236600</div>
+                </div>
+            </div>
+        </div>
+        <img src="img/cm-photo.png" alt="Shri Yogi Adityanath, Hon'ble Chief Minister" class="cm-photo" />
+    </header>
+
+    <!-- orange nav band -->
+    <nav class="upmsf-navband">
+        <div class="nav-left">
+            <a href="">HOME</a>
+            <AuthorizeView>
+                <Authorized>
+                    <a href="dashboard">DASHBOARD</a>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-right">
+                    <span class="user-chip">@Auth.CurrentRegistrationId</span>
+                    <button class="btn-logout" @onclick="Logout">Logout</button>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+    </nav>
+
+    <main class="upmsf-main">
+        @Body
+    </main>
+
+    <footer class="upmsf-footer">
+        <div class="footer-grid">
+            <div>
+                <div class="foot-head">Uttar Pradesh State Medical Faculty</div>
+                <div>New College Opening / Seat Enhancement Application Portal</div>
+                <div class="muted">Official portal of UPSMF — Lucknow, Uttar Pradesh, India.</div>
+            </div>
+            <div>
+                <div class="foot-head">Helpline &amp; Contact</div>
+                <div>📧 Online Payment Query: <a href="mailto:collegeopening@upsmfac.org">collegeopening@upsmfac.org</a></div>
+                <div>📱 +91-8881268880 — Working Days (9.30 AM - 6.00 PM)</div>
+                <div>☎ (0522) 2238846, 2235964, 2235965</div>
+                <div>🖨 Fax: (0522) 2236600</div>
+            </div>
+        </div>
+    </footer>
+</div>
+
+@code {
+    private DateTime _now = DateTime.Now;
+    private System.Threading.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        Loc.OnChange += StateHasChanged;
+        _timer = new System.Threading.Timer(_ =>
+        {
+            _now = DateTime.Now;
+            InvokeAsync(StateHasChanged);
+        }, null, 0, 1000);
+    }
+
+    public void Dispose()
+    {
+        Loc.OnChange -= StateHasChanged;
+        _timer?.Dispose();
+    }
+
+    private void ToggleLang() => Loc.Toggle();
+
+    private async Task Logout()
+    {
+        await Auth.SignOutAsync();
+        Nav.NavigateTo("", forceLoad: false);
+    }
+}

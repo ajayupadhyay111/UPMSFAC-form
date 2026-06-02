@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/UPMSF.Client/UPMSF.Client.csproj" />
+    <Project Path="src/UPMSF.Server/UPMSF.Server.csproj" />
+    <Project Path="src/UPMSF.Shared/UPMSF.Shared.csproj" />
+  </Folder>
+</Solution>

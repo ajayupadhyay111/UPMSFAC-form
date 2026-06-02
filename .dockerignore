@@ -1,0 +1,7 @@
+**/bin/
+**/obj/
+**/.vs/
+publish/
+src/UPMSF.Server/App_Data/
+.git/
+*.user

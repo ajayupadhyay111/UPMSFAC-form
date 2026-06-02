@@ -1,0 +1,192 @@
+@page "/application/new"
+@page "/application/{Id:int}"
+@attribute [Authorize]
+@using UPMSF.Client.Pages.Steps
+@implements IDisposable
+@inject ApiClient Api
+@inject LocalizationService Loc
+@inject NavigationManager Nav
+@inject AppAuthStateProvider Auth
+
+<PageTitle>Application</PageTitle>
+
+@if (_createMode)
+{
+    <h1 class="page-title">New Application</h1>
+    <p class="hint">Choose New Course or Seat Enhancement to begin. An Application Number will be generated on save.</p>
+    @if (_createError is not null) { <div class="alert-err">@_createError</div> }
+    <CourseDetailsStep State="StepState.Active" CollectSeats="_isShortFlow" OnSubmit="CreateApplication" />
+}
+else if (_detail is null)
+{
+    <p class="hint">Loading application…</p>
+}
+else
+{
+    <h1 class="page-title">Application @_detail.ApplicationNumber</h1>
+
+    <div class="stepper">
+        @foreach (var s in StepLabels)
+        {
+            var st = StateOf(s.Step);
+            <div class="step @(st == StepState.Active ? "active" : st == StepState.Locked ? "done" : "")">@s.Label</div>
+        }
+    </div>
+
+    <!-- Applicant snapshot (read-only, from account) -->
+    <div class="section-head clickable" @onclick="@(() => _appOpen = !_appOpen)">
+        <span>@Loc["applicant_details"]</span>
+        <span class="chev">@(_appOpen ? "▾" : "▸")</span>
+    </div>
+    <div class="section-body locked" style="@(_appOpen ? null : "display:none")">
+        <div class="frm-row"><label>@Loc["society_name"]</label><input value="@_detail.SocietyName" disabled /></div>
+        <div class="frm-row"><label>@Loc["proposed_institute"]</label><input value="@_detail.ProposedInstituteName" disabled /></div>
+        <div class="frm-row"><label>@Loc["address"]</label><input value="@_detail.Address" disabled /></div>
+        <div class="frm-row"><label>@Loc["district"]</label><input value="@_detail.DistrictName" disabled /></div>
+    </div>
+
+    <CourseDetailsStep State="StepState.Locked" Initial="_detail.CourseDetails" />
+
+    <Part1Step ApplicationId="_detail.Id" State="StateOf(ApplicationStep.FormPart1)"
+               AppliedFor="_detail.CourseDetails!.AppliedFor"
+               Initial="Part1Initial()" OnSaved="Reload" />
+
+    <Part2Step ApplicationId="_detail.Id" State="StateOf(ApplicationStep.FormPart2)"
+               Initial="_detail.Part2" OnSaved="Reload" />
+
+    <DocumentsStep ApplicationId="_detail.Id" State="StateOf(ApplicationStep.Documents)"
+                   Initial="_detail.Documents" OnSaved="Reload" />
+
+    <!-- Preview / Final Verification — available before payment & submit -->
+    <div style="margin:1rem 0;display:flex;gap:.6rem;flex-wrap:wrap;">
+        <button class="btn-step" style="margin:0;" @onclick="@(() => _showPreview = !_showPreview)">
+            🔍 @(_showPreview ? "Hide Preview" : "Preview / Final Verification")
+        </button>
+    </div>
+    @if (_showPreview)
+    {
+        <div class="section-head" style="margin-top:0;">Preview / Final Verification</div>
+        <ApplicationPreview Detail="_detail" ApplicationId="_detail.Id" />
+    }
+
+    <PaymentStep ApplicationId="_detail.Id" State="StateOf(ApplicationStep.Payment)"
+                 Pay="_detail.Payment" NoFee="_detail.IsShortForm"
+                 Submitted="@(_detail.Status == ApplicationStatus.Submitted)"
+                 OnChanged="Reload" OnSubmitted="OnAppSubmitted" />
+
+    <div style="margin-top:1rem;">
+        <button class="btn-step" style="margin:0;background:#789;" @onclick="@(() => Nav.NavigateTo("dashboard"))">Back to Dashboard</button>
+    </div>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    private ApplicationDetailDto? _detail;
+    private bool _createMode;
+    private bool _appOpen;       // applicant snapshot collapsed by default
+    private bool _showPreview;
+    private bool _isShortFlow;   // a submitted app exists -> new apps reuse details (seats in course step)
+    private string? _createError;
+
+    record StepLabel(ApplicationStep Step, string Label);
+    private static readonly StepLabel[] StepLabels =
+    {
+        new(ApplicationStep.CourseDetails, "Course"),
+        new(ApplicationStep.FormPart1, "Part-I"),
+        new(ApplicationStep.FormPart2, "Part-II"),
+        new(ApplicationStep.Documents, "Documents"),
+        new(ApplicationStep.Payment, "Payment & Submit"),
+    };
+
+    protected override void OnInitialized() => Loc.OnChange += StateHasChanged;
+    public void Dispose() => Loc.OnChange -= StateHasChanged;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _createMode = Nav.Uri.TrimEnd('/').EndsWith("application/new", StringComparison.OrdinalIgnoreCase);
+        if (_createMode)
+        {
+            var apps = await Api.GetApplicationsAsync();
+            _isShortFlow = apps.Any(a => a.Status == ApplicationStatus.Submitted);
+        }
+        else if (Id is not null)
+        {
+            await Reload();
+        }
+    }
+
+    private async Task Reload()
+    {
+        if (Id is null) return;
+        _detail = await Api.GetApplicationAsync(Id.Value);
+        StateHasChanged();
+    }
+
+    // Step 6 complete. First (full) application -> sign out and show the login page.
+    // (Short dashboard applications auto-submit at creation and never reach here.)
+    private async Task OnAppSubmitted()
+    {
+        await Reload();
+        if (_detail?.IsShortForm == true)
+        {
+            Nav.NavigateTo($"dashboard?submitted={Uri.EscapeDataString(_detail.ApplicationNumber)}");
+        }
+        else
+        {
+            await Auth.SignOutAsync();
+            Nav.NavigateTo("login?submitted=true");
+        }
+    }
+
+    private async Task CreateApplication(CourseDetailsDto dto)
+    {
+        _createError = null;
+        var res = await Api.CreateApplicationAsync(dto);
+        if (!res.Ok) { _createError = res.Error; return; }
+
+        // Dashboard (short) applications reuse the first application's details — there is
+        // nothing to fill, so submit immediately and go back to the dashboard. Only the
+        // first/full application opens the multi-step wizard.
+        var detail = await Api.GetApplicationAsync(res.Value!.Id);
+        if (detail?.IsShortForm == true)
+        {
+            var sub = await Api.SubmitAsync(res.Value.Id);
+            Nav.NavigateTo(sub.Ok
+                ? $"dashboard?submitted={Uri.EscapeDataString(res.Value.ApplicationNumber)}"
+                : $"application/{res.Value.Id}");
+            return;
+        }
+        Nav.NavigateTo($"application/{res.Value.Id}");
+    }
+
+    private StepState StateOf(ApplicationStep step)
+    {
+        if (_detail is null) return StepState.Future;
+        var cur = (int)_detail.CurrentStep;
+        var s = (int)step;
+        if (_detail.Status == ApplicationStatus.Submitted) return StepState.Locked;
+        if (s < cur) return StepState.Locked;
+        if (s == cur) return StepState.Active;
+        return StepState.Future;
+    }
+
+    /// <summary>Pre-fill Part-I training centre fields from the account when starting fresh.</summary>
+    private FormPart1Dto? Part1Initial()
+    {
+        if (_detail is null) return null;
+        if (_detail.Part1 is not null)
+        {
+            // carry the seat numbers (stored on the application) into the Part-I editor
+            _detail.Part1.NoOfSeatsApplied = _detail.CourseDetails?.NoOfSeatsApplied;
+            _detail.Part1.NoOfExistingSeats = _detail.CourseDetails?.NoOfExistingSeats;
+            return _detail.Part1;
+        }
+        return new FormPart1Dto
+        {
+            TrainingCenterName = _detail.ProposedInstituteName,
+            TrainingCenterAddress = _detail.Address,
+            NoOfSeatsApplied = _detail.CourseDetails?.NoOfSeatsApplied,
+            NoOfExistingSeats = _detail.CourseDetails?.NoOfExistingSeats
+        };
+    }
+}

@@ -1,0 +1,8 @@
+# This is for your HOST Caddy (e.g. /etc/caddy/Caddyfile), NOT a container.
+# Replace yourdomain.com with your real domain, then: sudo systemctl reload caddy
+# Caddy fetches/renews the HTTPS certificate automatically.
+
+yourdomain.com, www.yourdomain.com {
+    encode gzip
+    reverse_proxy 127.0.0.1:8080
+}

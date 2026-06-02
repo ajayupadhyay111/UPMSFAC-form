@@ -1,0 +1,8 @@
+bin/
+obj/
+publish/
+*.user
+.vs/
+src/UPMSF.Server/App_Data/
+appsettings.*.local.json
+.env

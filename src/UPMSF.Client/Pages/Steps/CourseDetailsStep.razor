@@ -1,0 +1,159 @@
+@using UPMSF.Client.Pages.Steps
+@implements IDisposable
+@inject ApiClient Api
+@inject LocalizationService Loc
+
+<div class="section-head clickable" @onclick="@(() => _open = !_open)">
+    <span>@Loc["course_details"]</span>
+    <div class="head-right">
+        @if (State == StepState.Locked) { <span class="lock-badge">🔒 @Loc["locked"]</span> }
+        <span class="chev">@(_open ? "▾" : "▸")</span>
+    </div>
+</div>
+<div class="section-body @(State == StepState.Locked ? "locked" : "")" style="@(_open ? null : "display:none")">
+    @if (_error is not null) { <div class="alert-err">@_error</div> }
+
+    @{ var dis = State != StepState.Active; }
+
+    <div class="frm-row">
+        <label>@Loc["applied_for"]</label>
+        <div class="radio-line">
+            <label><input type="radio" name="applied" disabled="@dis"
+                   checked="@(_model.AppliedFor == AppliedFor.NewCourse)"
+                   @onchange="@(() => SetAppliedFor(AppliedFor.NewCourse))" /> @Loc["new_course"]</label>
+            <label><input type="radio" name="applied" disabled="@dis"
+                   checked="@(_model.AppliedFor == AppliedFor.SeatEnhancement)"
+                   @onchange="@(() => SetAppliedFor(AppliedFor.SeatEnhancement))" /> @Loc["seat_enhancement"]</label>
+        </div>
+    </div>
+
+    <div class="frm-row">
+        <label>@Loc["council"]</label>
+        <select disabled="@dis" value="@_model.CouncilId" @onchange="OnCouncilChange">
+            <option value="0">-- Select --</option>
+            @foreach (var c in _councils)
+            {
+                <option value="@c.Id">@c.Name</option>
+            }
+        </select>
+    </div>
+
+    @if (_model.AppliedFor == AppliedFor.NewCourse)
+    {
+        <div class="frm-row">
+            <label>@Loc["course_type"]</label>
+            <div class="radio-line">
+                @foreach (var ct in new[] { CourseType.Diploma, CourseType.Degree, CourseType.Masters })
+                {
+                    <label><input type="radio" name="ctype" disabled="@dis"
+                           checked="@(_model.CourseType == ct)"
+                           @onchange="@(() => OnCourseTypeChange(ct))" /> @ct</label>
+                }
+            </div>
+        </div>
+        <div class="frm-row">
+            <label>@Loc["select_course"]</label>
+            <select disabled="@dis" value="@_model.CourseId" @onchange="OnCourseChange">
+                <option value="0">-- Select Course --</option>
+                @foreach (var c in _courses)
+                {
+                    <option value="@c.Id">@c.Name (@c.ShortCode)</option>
+                }
+            </select>
+        </div>
+    }
+    else if (CollectSeats)
+    {
+        <div class="frm-row">
+            <label style="color:#c0392b;">@Loc["enhancement_seats"]</label>
+            <input type="number" min="1" disabled="@dis" value="@_model.NoOfSeatsApplied"
+                   @onchange="@(e => _model.NoOfSeatsApplied = ParseInt(e.Value))" />
+        </div>
+        <div class="frm-row">
+            <label>@Loc["existing_seats"]</label>
+            <input type="number" min="0" disabled="@dis" value="@_model.NoOfExistingSeats"
+                   @onchange="@(e => _model.NoOfExistingSeats = ParseInt(e.Value))" />
+        </div>
+    }
+    else
+    {
+        <p class="hint full">Seat numbers (existing &amp; new) will be entered in <strong>Form Part-I</strong>.</p>
+    }
+
+    @if (State == StepState.Active)
+    {
+        <button class="btn-step" disabled="@_busy" @onclick="Save">
+            @(_busy ? "Saving…" : Loc["save_proceed"])
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public StepState State { get; set; }
+    [Parameter] public CourseDetailsDto? Initial { get; set; }
+    /// <summary>True only for short (dashboard) apps, which collect seats here because Form-I is skipped.</summary>
+    [Parameter] public bool CollectSeats { get; set; }
+    /// <summary>Called with the validated DTO when the user saves (create flow).</summary>
+    [Parameter] public EventCallback<CourseDetailsDto> OnSubmit { get; set; }
+
+    private CourseDetailsDto _model = new();
+    private List<LookupItem> _councils = new();
+    private List<CourseDto> _courses = new();
+    private string? _error;
+    private bool _busy;
+    private bool _open = true;
+    private StepState _prevState = (StepState)(-1);
+
+    protected override void OnParametersSet()
+    {
+        if (State != _prevState) { _open = State == StepState.Active; _prevState = State; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Loc.OnChange += StateHasChanged;
+        if (Initial is not null) _model = Initial;
+        _councils = await Api.GetCouncilsAsync();
+        if (_model.CouncilId == 0 && _councils.Count == 1) _model.CouncilId = _councils[0].Id;
+        if (_model.AppliedFor == AppliedFor.NewCourse && _model.CourseType is not null && _model.CouncilId > 0)
+            _courses = await Api.GetCoursesAsync(_model.CouncilId, _model.CourseType.Value);
+    }
+    public void Dispose() => Loc.OnChange -= StateHasChanged;
+
+    private void SetAppliedFor(AppliedFor v)
+    {
+        _model.AppliedFor = v;
+        if (v == AppliedFor.SeatEnhancement) { _model.CourseType = null; _model.CourseId = null; _courses = new(); }
+    }
+
+    private async Task OnCouncilChange(ChangeEventArgs e)
+    {
+        _model.CouncilId = ParseInt(e.Value) ?? 0;
+        _courses = new(); _model.CourseId = null;
+        if (_model.CourseType is not null && _model.CouncilId > 0)
+            _courses = await Api.GetCoursesAsync(_model.CouncilId, _model.CourseType.Value);
+    }
+
+    private async Task OnCourseTypeChange(CourseType ct)
+    {
+        _model.CourseType = ct;
+        _model.CourseId = null;
+        _courses = _model.CouncilId > 0 ? await Api.GetCoursesAsync(_model.CouncilId, ct) : new();
+    }
+
+    private void OnCourseChange(ChangeEventArgs e) => _model.CourseId = ParseInt(e.Value);
+
+    private async Task Save()
+    {
+        _error = null;
+        var v = _model.Validate(requireSeats: CollectSeats);
+        if (v is not null) { _error = v.Error; return; }
+        if (_model.CouncilId == 0) { _error = "Please select a council."; return; }
+        _busy = true;
+        await OnSubmit.InvokeAsync(_model);
+        _busy = false;
+    }
+
+    private static int? ParseInt(object? v) =>
+        int.TryParse(v?.ToString(), out var n) ? n : null;
+}

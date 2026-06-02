@@ -1,0 +1,70 @@
+@page "/login"
+@inject ApiClient Api
+@inject AppAuthStateProvider Auth
+@inject NavigationManager Nav
+@inject FlowService Flow
+
+<PageTitle>Login</PageTitle>
+<h1 class="page-title">Applicant Login</h1>
+
+@if (Submitted)
+{
+    <div class="alert-ok">🎉 Your application has been submitted successfully. Please login to manage further
+        applications (New Course / Seat Enhancement) from your dashboard.</div>
+}
+
+<EditForm Model="_model" OnValidSubmit="Submit" class="auth-box">
+    <DataAnnotationsValidator />
+
+    @if (_error is not null)
+    {
+        <div class="alert-err">@_error</div>
+    }
+
+    <div class="section-body">
+        <div class="frm-row">
+            <label>Phone</label>
+            <div>
+                <InputText @bind-Value="_model.Phone" maxlength="12" inputmode="numeric" placeholder="Registered phone" />
+                <ValidationMessage For="@(() => _model.Phone)" />
+            </div>
+        </div>
+        <div class="frm-row">
+            <label>Registration Code</label>
+            <div>
+                <InputText @bind-Value="_model.RegistrationId" maxlength="20" placeholder="e.g. AH91000003" />
+                <ValidationMessage For="@(() => _model.RegistrationId)" />
+            </div>
+        </div>
+        <ValidationSummary />
+    </div>
+
+    <button type="submit" class="btn-step" disabled="@_busy">
+        @(_busy ? "Signing in…" : "Login")
+    </button>
+    <button type="button" class="btn-step" style="background:#789;"
+            @onclick="@(() => Nav.NavigateTo("register"))">New Registration</button>
+</EditForm>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] public bool Submitted { get; set; }
+    private LoginRequest _model = new();
+    private string? _error;
+    private bool _busy;
+
+    private async Task Submit()
+    {
+        _error = null;
+        _busy = true;
+        var res = await Api.LoginAsync(_model);
+        _busy = false;
+        if (!res.Ok) { _error = res.Error; return; }
+
+        await Auth.SignInAsync(res.Value!.Token);
+        if (!string.IsNullOrWhiteSpace(ReturnUrl))
+            Nav.NavigateTo(ReturnUrl);
+        else
+            await Flow.ResumeAsync();   // resume at saved step, or dashboard
+    }
+}

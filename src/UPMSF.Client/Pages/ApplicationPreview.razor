@@ -1,0 +1,183 @@
+@inject ApiClient Api
+@inject IJSRuntime JS
+
+<div class="section-body" style="background:#fbfbfb;">
+    @if (Detail is null)
+    {
+        <p class="hint">Nothing to preview yet.</p>
+    }
+    else
+    {
+        @if (_error is not null) { <div class="alert-err">@_error</div> }
+
+        <h3 style="color:var(--upmsf-teal);margin-top:0;">Application @Detail.ApplicationNumber</h3>
+
+        @foreach (var grp in BuildGroups())
+        {
+            <div class="prev-grp">@grp.Title</div>
+            @foreach (var row in grp.Rows)
+            {
+                <div class="prev-row">
+                    <div class="prev-label">@row.Label</div>
+                    <div>@(string.IsNullOrWhiteSpace(row.Value) ? "—" : row.Value)</div>
+                </div>
+            }
+        }
+
+        <div class="prev-grp">Documents</div>
+        @foreach (var slot in DocCatalog.Slots)
+        {
+            <div class="doc-row">
+                <div class="doc-name"><strong>@slot.Label</strong> <span class="hint">(.@(DocumentRules.AllowedExtension(slot.Type)))</span></div>
+                @if (GetDoc(slot.Type) is { } doc)
+                {
+                    @if (DocumentRules.AllowedExtension(slot.Type) == "pdf")
+                    {
+                        <span class="doc-ok">✔ @doc.OriginalFileName</span>
+                        <button class="btn-step" style="margin:0;padding:.25rem .8rem;"
+                                disabled="@_viewing" @onclick="@(() => View(slot.Type))">View</button>
+                    }
+                    else
+                    {
+                        <span class="doc-ok">✔ @doc.OriginalFileName (ZIP)</span>
+                    }
+                }
+                else
+                {
+                    <span class="hint">— not uploaded —</span>
+                }
+            </div>
+        }
+
+        <button class="btn-step" style="background:#789;margin-top:1rem;" @onclick="Print">🖨 Print</button>
+    }
+</div>
+
+@code {
+    [Parameter] public ApplicationDetailDto? Detail { get; set; }
+    [Parameter] public int ApplicationId { get; set; }
+
+    private string? _error;
+    private bool _viewing;
+
+    private record Group(string Title, List<(string Label, string? Value)> Rows);
+
+    private DocumentDto? GetDoc(DocumentType t) =>
+        Detail?.Documents.FirstOrDefault(d => d.DocumentType == t);
+
+    private List<Group> BuildGroups()
+    {
+        var groups = new List<Group>();
+        if (Detail is null) return groups;
+
+        groups.Add(new Group("Applicant", new()
+        {
+            ("Society/Trust/Company", Detail.SocietyName),
+            ("Proposed Institute", Detail.ProposedInstituteName),
+            ("Address", Detail.Address),
+            ("District", Detail.DistrictName),
+        }));
+
+        var cd = Detail.CourseDetails;
+        var courseRows = new List<(string, string?)>
+        {
+            ("Applied For", cd?.AppliedFor == AppliedFor.SeatEnhancement ? "Seat Enhancement" : "New Course"),
+        };
+        if (cd?.AppliedFor == AppliedFor.NewCourse)
+        {
+            courseRows.Add(("Course Type", cd?.CourseType?.ToString()));
+            courseRows.Add(("Course", Detail.CourseName));
+        }
+        else
+        {
+            courseRows.Add(("No. of Existing Seats", cd?.NoOfExistingSeats?.ToString()));
+            courseRows.Add(("No. of Seats Applied (Enhancement)", cd?.NoOfSeatsApplied?.ToString()));
+        }
+        groups.Add(new Group("Course Details", courseRows));
+
+        if (Detail.Part1 is { } p)
+        {
+            var rows = new List<(string, string?)>
+            {
+                ("Nature of Institution", p.NatureOfInstitution),
+                ("Where Registered", p.WhereRegistered),
+                ("Registration Date", p.RegistrationDate?.ToString("dd/MM/yyyy")),
+                ("Registration Number", p.RegistrationNumber),
+                ("Total Land in U.P. (Hectare)", p.TotalLandInUpHectare.ToString()),
+                ("Head Name & Mobile", p.HeadNameAndMobile),
+                ("Executive Person & Mobile", p.ExecutivePersonNameAndMobile),
+                ("Training Center Name", p.TrainingCenterName),
+                ("Training Center Address", p.TrainingCenterAddress),
+                ("Current Admission Capacity", p.CurrentAdmissionCapacity.ToString()),
+                ("Enhanced Admission Capacity", p.EnhancedAdmissionCapacity.ToString()),
+                ("Recognition Order No. & Date", p.RecognitionOrderNumberAndDate),
+                ("Other Ongoing Trainings", p.OtherOngoingTrainings),
+            };
+            groups.Add(new Group("Form Part-I", rows));
+        }
+
+        if (Detail.Part2 is { } q)
+        {
+            groups.Add(new Group("Form Part-II", new()
+            {
+                ("Teaching Land Owner", q.TeachingLandOwnerName),
+                ("Teaching Khasra/Plot", q.TeachingKhasraPlotNo),
+                ("Land Area (sqft)", q.LandAreaSqft.ToString()),
+                ("Teaching Block Built Area (sqft)", q.TeachingBlockBuiltAreaSqft.ToString()),
+                ("Teaching Fire Reg No.", q.TeachingFireRegNo),
+                ("Teaching Fire Validity", q.TeachingFireValidity?.ToString("dd/MM/yyyy")),
+                ("Hostel Block Built Area (sqft)", q.HostelBlockBuiltAreaSqft.ToString()),
+                ("Hostel Khasra/Plot", q.HostelKhasraPlotNo),
+                ("Hostel Fire Reg No.", q.HostelFireRegNo),
+                ("Hostel Fire Validity", q.HostelFireValidity?.ToString("dd/MM/yyyy")),
+                ("Hospital Land Owner", q.HospitalLandOwnerName),
+                ("Hospital Khasra/Plot", q.HospitalKhasraPlotNo),
+                ("Hospital Name", q.HospitalName),
+                ("Hospital Address", q.HospitalAddress),
+                ("Hospital Total Beds", q.HospitalTotalBeds.ToString()),
+                ("Beds at Previous Application", q.HospitalBedsAtPreviousApplication?.ToString()),
+                ("CMO Reg No.", q.CmoRegNo),
+                ("CMO Validity", q.CmoValidity?.ToString("dd/MM/yyyy")),
+                ("CMO Bed Count", q.CmoBedCount?.ToString()),
+                ("PCB Reg No.", q.PcbRegNo),
+                ("PCB Validity", q.PcbValidity?.ToString("dd/MM/yyyy")),
+                ("PCB Bed Count", q.PcbBedCount?.ToString()),
+                ("Hospital Fire Reg No.", q.HospitalFireRegNo),
+                ("Hospital Fire Validity", q.HospitalFireValidity?.ToString("dd/MM/yyyy")),
+                ("Empanelled with PMJAY", q.IsHospitalEmpanelledPmjay ? "Yes" : "No"),
+                ("Deposit", q.Deposit.ToString("N2")),
+                ("Fixed Assets Value", q.FixedAssetsValue.ToString("N2")),
+                ("Current Assets Value", q.CurrentAssetsValue.ToString("N2")),
+                ("Capital Investment", q.CapitalInvestment.ToString("N2")),
+                ("Institution Account Number", q.InstitutionAccountNumber),
+            }));
+        }
+
+        var pay = Detail.Payment;
+        groups.Add(new Group("Payment", new()
+        {
+            ("Application & Inspection Fee", "₹ " + pay.BaseFee.ToString("N2")),
+            ($"GST ({pay.GstPercent}%)", "₹ " + pay.GstAmount.ToString("N2")),
+            ("Total Amount", "₹ " + pay.TotalAmount.ToString("N2")),
+            ("Payment Status", pay.Status.ToString()),
+            ("Transaction Id", pay.TransactionId),
+        }));
+
+        return groups;
+    }
+
+    private async Task View(DocumentType type)
+    {
+        _error = null; _viewing = true;
+        try
+        {
+            var res = await Api.DownloadDocumentAsync(ApplicationId, type);
+            if (res is null) { _error = "Could not load file."; return; }
+            await JS.InvokeVoidAsync("upmsfOpenBlob", Convert.ToBase64String(res.Value.Data), res.Value.ContentType);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _viewing = false; }
+    }
+
+    private async Task Print() => await JS.InvokeVoidAsync("window.print");
+}

@@ -1,0 +1,100 @@
+@using UPMSF.Client.Pages.Steps
+@implements IDisposable
+@inject ApiClient Api
+@inject LocalizationService Loc
+
+<div class="section-head clickable" @onclick="@(() => _open = !_open)">
+    <span>@Loc["documents_title"]</span>
+    <div class="head-right">
+        @if (State == StepState.Locked) { <span class="lock-badge">🔒 @Loc["locked"]</span> }
+        <span class="chev">@(_open ? "▾" : "▸")</span>
+    </div>
+</div>
+<div class="section-body @(State == StepState.Locked ? "locked" : "")" style="@(_open ? null : "display:none")">
+    @if (State == StepState.Future)
+    {
+        <p class="hint">Complete the previous step to unlock this section.</p>
+    }
+    else
+    {
+        @if (_error is not null) { <div class="alert-err">@_error</div> }
+        <p class="hint">PDF for certificates, ZIP for record/photo bundles. Max 25 MB each.</p>
+
+        @foreach (var slot in DocCatalog.Slots)
+        {
+            var uploaded = _uploaded.GetValueOrDefault(slot.Type);
+            var ext = DocumentRules.AllowedExtension(slot.Type);
+            <div class="doc-row">
+                <div class="doc-name">
+                    <strong>@slot.Label</strong> <span class="hint">(.@ext)</span>
+                </div>
+                @if (uploaded is not null)
+                {
+                    <span class="doc-ok">✔ @uploaded.OriginalFileName</span>
+                }
+                @if (State == StepState.Active)
+                {
+                    <InputFile OnChange="@(e => Upload(slot.Type, e))" accept="@("." + ext)" />
+                }
+            </div>
+        }
+
+        @if (State == StepState.Active)
+        {
+            <button class="btn-step" disabled="@_busy" @onclick="Proceed">
+                @(_busy ? "Please wait…" : Loc["save_proceed"])
+            </button>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public int ApplicationId { get; set; }
+    [Parameter] public StepState State { get; set; }
+    [Parameter] public List<DocumentDto>? Initial { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private readonly Dictionary<DocumentType, DocumentDto> _uploaded = new();
+    private string? _error;
+    private bool _busy;
+    private bool _open = true;
+    private StepState _prevState = (StepState)(-1);
+
+    protected override void OnInitialized() => Loc.OnChange += StateHasChanged;
+    protected override void OnParametersSet()
+    {
+        if (Initial is not null)
+            foreach (var d in Initial) _uploaded[d.DocumentType] = d;
+        if (State != _prevState) { _open = State == StepState.Active; _prevState = State; }
+    }
+    public void Dispose() => Loc.OnChange -= StateHasChanged;
+
+    private async Task Upload(DocumentType type, InputFileChangeEventArgs e)
+    {
+        _error = null;
+        var file = e.File;
+        if (file.Size > DocumentRules.MaxFileSizeBytes) { _error = $"{file.Name}: exceeds 25 MB."; return; }
+        _busy = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(DocumentRules.MaxFileSizeBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+            var res = await Api.UploadDocumentAsync(ApplicationId, type, ms, file.Name, file.Size);
+            if (res.Ok) _uploaded[type] = res.Value!;
+            else _error = res.Error;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        _busy = false;
+    }
+
+    private async Task Proceed()
+    {
+        _error = null; _busy = true;
+        var res = await Api.ProceedDocumentsAsync(ApplicationId);
+        _busy = false;
+        if (res.Ok) await OnSaved.InvokeAsync();
+        else _error = res.Error;
+    }
+}

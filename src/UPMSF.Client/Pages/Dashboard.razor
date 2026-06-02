@@ -1,0 +1,124 @@
+@page "/dashboard"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject AppAuthStateProvider Auth
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard</PageTitle>
+<h1 class="page-title">Dashboard</h1>
+
+@if (!string.IsNullOrEmpty(Submitted))
+{
+    <div class="alert-ok">🎉 Application <strong>@Submitted</strong> submitted successfully.</div>
+}
+
+<!-- Read-only profile (what the applicant filled at registration) -->
+<div class="section-head clickable" @onclick="@(() => _profileOpen = !_profileOpen)">
+    <span>My Profile</span>
+    <span class="chev">@(_profileOpen ? "▾" : "▸")</span>
+</div>
+<div class="section-body locked" style="@(_profileOpen ? null : "display:none")">
+    @if (_profile is null)
+    {
+        <p class="hint">Loading profile…</p>
+    }
+    else
+    {
+        <div class="frm-row"><label>Registration Code</label><input value="@_profile.RegistrationId" disabled /></div>
+        <div class="frm-row"><label>Applicant Type</label><input value="@_profile.ApplicantType" disabled /></div>
+        <div class="frm-row"><label>Name of Society/Trust/Company</label><input value="@_profile.SocietyName" disabled /></div>
+        <div class="frm-row"><label>Proposed Institute Name</label><input value="@_profile.ProposedInstituteName" disabled /></div>
+        <div class="frm-row"><label>Address</label><input value="@_profile.Address" disabled /></div>
+        <div class="frm-row"><label>District</label><input value="@_profile.DistrictName" disabled /></div>
+        <div class="frm-row"><label>Pin Code</label><input value="@_profile.PinCode" disabled /></div>
+        <div class="frm-row"><label>Contact Person Name</label><input value="@_profile.ContactPersonName" disabled /></div>
+        <div class="frm-row"><label>Phone</label><input value="@_profile.Phone" disabled /></div>
+        <div class="frm-row"><label>Mobile</label><input value="@_profile.Mobile" disabled /></div>
+        <div class="frm-row"><label>Email</label><input value="@_profile.Email" disabled /></div>
+        <div class="frm-row"><label>Registered On</label><input value="@_profile.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")" disabled /></div>
+        <p class="hint">These details were submitted at registration and cannot be edited here.</p>
+    }
+</div>
+
+<h2 class="page-title" style="margin-top:1.4rem;font-size:1.25rem;">My Applications</h2>
+<button class="btn-step" @onclick="@(() => Nav.NavigateTo("application/new"))">+ New Application (New Course / Seat Enhancement)</button>
+
+<div style="margin-top:1.2rem;">
+    @if (_loading)
+    {
+        <p class="hint">Loading…</p>
+    }
+    else if (_apps.Count == 0)
+    {
+        <div class="section-body">No applications yet. Click <strong>New Application</strong> to start.</div>
+    }
+    else
+    {
+        @foreach (var a in _apps)
+        {
+            <div class="app-card">
+                <div>
+                    <div class="num">
+                        @a.ApplicationNumber
+                        @if (a.IsShortForm) { <span class="badge-status badge-pay" style="margin-left:.4rem;">Quick</span> }
+                    </div>
+                    <div style="font-weight:600;color:#333;margin:.15rem 0;">@ChangeText(a)</div>
+                    <div class="hint">Created: @a.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                    @if (a.SubmittedAtUtc is not null)
+                    {
+                        <div class="hint">Submitted: @a.SubmittedAtUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                    }
+                </div>
+                <div style="text-align:right;">
+                    <span class="badge-status @StatusClass(a.Status)">@StatusText(a.Status)</span>
+                    <div style="margin-top:.5rem;">
+                        <button class="btn-step" style="margin:0;padding:.35rem .9rem;"
+                                @onclick="@(() => Nav.NavigateTo($"application/{a.Id}"))">
+                            @(a.Status == ApplicationStatus.Submitted ? "View" : "Continue")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? Submitted { get; set; }
+
+    private List<ApplicationSummaryDto> _apps = new();
+    private ProfileDto? _profile;
+    private bool _loading = true;
+    private bool _profileOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _profile = await Api.GetProfileAsync();
+        _apps = await Api.GetApplicationsAsync();
+        _loading = false;
+    }
+
+    private string ChangeText(ApplicationSummaryDto a)
+    {
+        if (a.AppliedFor == AppliedFor.SeatEnhancement)
+        {
+            var existing = a.NoOfExistingSeats ?? 0;
+            var add = a.NoOfSeatsApplied ?? 0;
+            return $"Seat Enhancement: +{add} seats (existing {existing} → {existing + add})";
+        }
+        return $"New Course: {a.CourseName}";
+    }
+
+    private string StatusText(ApplicationStatus s) => s switch
+    {
+        ApplicationStatus.Submitted => "Submitted",
+        ApplicationStatus.PaymentPending => "Payment Pending",
+        _ => "Draft"
+    };
+    private string StatusClass(ApplicationStatus s) => s switch
+    {
+        ApplicationStatus.Submitted => "badge-submitted",
+        ApplicationStatus.PaymentPending => "badge-pay",
+        _ => "badge-draft"
+    };
+}

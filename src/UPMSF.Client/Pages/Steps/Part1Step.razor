@@ -1,0 +1,98 @@
+@using UPMSF.Client.Pages.Steps
+@implements IDisposable
+@inject ApiClient Api
+@inject LocalizationService Loc
+
+<div class="section-head clickable" @onclick="@(() => _open = !_open)">
+    <span>@Loc["part1_title"]</span>
+    <div class="head-right">
+        @if (State == StepState.Locked) { <span class="lock-badge">🔒 @Loc["locked"]</span> }
+        <span class="chev">@(_open ? "▾" : "▸")</span>
+    </div>
+</div>
+<div class="section-body @(State == StepState.Locked ? "locked" : "")" style="@(_open ? null : "display:none")">
+    @if (State == StepState.Future)
+    {
+        <p class="hint">Complete the previous step to unlock this section.</p>
+    }
+    else
+    {
+        @if (State == StepState.Active) { <p class="english-note">@Loc["english_only_note"]</p> }
+        @if (_error is not null) { <div class="alert-err">@_error</div> }
+
+        <EditForm Model="_model" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <fieldset disabled="@(State != StepState.Active)">
+                @if (AppliedFor == AppliedFor.SeatEnhancement)
+                {
+                    <div class="frm-row">
+                        <label style="color:#c0392b;">@Loc["enhancement_seats"]</label>
+                        <InputNumber @bind-Value="_model.NoOfSeatsApplied" />
+                    </div>
+                    <div class="frm-row">
+                        <label style="color:#c0392b;">@Loc["existing_seats"]</label>
+                        <InputNumber @bind-Value="_model.NoOfExistingSeats" />
+                    </div>
+                }
+                <div class="frm-row"><label>@Loc["nature_of_institution"]</label><InputText @bind-Value="_model.NatureOfInstitution" /></div>
+                <div class="frm-row"><label>@Loc["where_registered"]</label><InputText @bind-Value="_model.WhereRegistered" /></div>
+                <div class="frm-row"><label>@Loc["registration_date"]</label><InputDate @bind-Value="_model.RegistrationDate" /></div>
+                <div class="frm-row"><label>@Loc["registration_number"]</label><InputText @bind-Value="_model.RegistrationNumber" /></div>
+                <div class="frm-row"><label>@Loc["total_land_up"]</label><InputNumber @bind-Value="_model.TotalLandInUpHectare" /></div>
+                <div class="frm-row"><label>@Loc["head_name_mobile"]</label><InputText @bind-Value="_model.HeadNameAndMobile" /></div>
+                <div class="frm-row"><label>@Loc["exec_name_mobile"]</label><InputText @bind-Value="_model.ExecutivePersonNameAndMobile" /></div>
+
+                <div class="section-head" style="background:#7aa7da;">@Loc["training_center"]</div>
+                <div class="frm-row"><label>@Loc["training_center_name"]</label><InputText @bind-Value="_model.TrainingCenterName" /></div>
+                <div class="frm-row"><label>@Loc["training_center_address"]</label><InputTextArea @bind-Value="_model.TrainingCenterAddress" rows="2" /></div>
+                <div class="frm-row"><label>@Loc["current_capacity"]</label><InputNumber @bind-Value="_model.CurrentAdmissionCapacity" /></div>
+                <div class="frm-row"><label>@Loc["enhanced_capacity"]</label><InputNumber @bind-Value="_model.EnhancedAdmissionCapacity" /></div>
+                <div class="frm-row"><label>@Loc["recognition_order"]</label><InputText @bind-Value="_model.RecognitionOrderNumberAndDate" /></div>
+                <div class="frm-row"><label>@Loc["other_trainings"]</label><InputTextArea @bind-Value="_model.OtherOngoingTrainings" rows="2" /></div>
+                <ValidationSummary />
+            </fieldset>
+
+            @if (State == StepState.Active)
+            {
+                <button type="submit" class="btn-step" disabled="@_busy">@(_busy ? "Saving…" : Loc["save_proceed"])</button>
+            }
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter] public int ApplicationId { get; set; }
+    [Parameter] public StepState State { get; set; }
+    [Parameter] public AppliedFor AppliedFor { get; set; }
+    [Parameter] public FormPart1Dto? Initial { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private FormPart1Dto _model = new();
+    private string? _error;
+    private bool _busy;
+    private bool _open = true;
+    private StepState _prevState = (StepState)(-1);
+
+    protected override void OnInitialized() => Loc.OnChange += StateHasChanged;
+    protected override void OnParametersSet()
+    {
+        if (Initial is not null) _model = Initial;
+        if (State != _prevState) { _open = State == StepState.Active; _prevState = State; }
+    }
+    public void Dispose() => Loc.OnChange -= StateHasChanged;
+
+    private async Task Save()
+    {
+        _error = null;
+        if (AppliedFor == AppliedFor.SeatEnhancement)
+        {
+            if (_model.NoOfSeatsApplied is null or <= 0) { _error = "No. of Seats Applied for (Enhancement) is required."; return; }
+            if (_model.NoOfExistingSeats is null or < 0) { _error = "No. of Existing Seats is required."; return; }
+        }
+        _busy = true;
+        var res = await Api.SavePart1Async(ApplicationId, _model);
+        _busy = false;
+        if (res.Ok) await OnSaved.InvokeAsync();
+        else _error = res.Error;
+    }
+}

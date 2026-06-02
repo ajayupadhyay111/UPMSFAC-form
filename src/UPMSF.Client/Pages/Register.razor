@@ -1,0 +1,156 @@
+@page "/register"
+@implements IDisposable
+@inject ApiClient Api
+@inject LocalizationService Loc
+@inject NavigationManager Nav
+@inject AppAuthStateProvider Auth
+
+<PageTitle>Register</PageTitle>
+<h1 class="page-title">@Loc["applicant_details"]</h1>
+
+@if (_result is null)
+{
+    <p class="english-note">@Loc["english_only_note"]</p>
+
+    <EditForm Model="_model" OnValidSubmit="Submit" class="auth-box">
+        <DataAnnotationsValidator />
+
+        @if (_error is not null)
+        {
+            <div class="alert-err">@_error</div>
+        }
+
+        <div class="section-body">
+            <div class="frm-row">
+                <label>@Loc["applicant_type"]</label>
+                <InputSelect @bind-Value="_model.ApplicantType">
+                    <option value="@ApplicantType.Society">Society</option>
+                    <option value="@ApplicantType.Trust">Trust</option>
+                    <option value="@ApplicantType.Company">Company</option>
+                </InputSelect>
+            </div>
+            <div class="frm-row">
+                <label>@Loc["society_name"]</label>
+                <InputText @bind-Value="_model.SocietyName" />
+            </div>
+            <div class="frm-row">
+                <label>@Loc["proposed_institute"]</label>
+                <InputText @bind-Value="_model.ProposedInstituteName" />
+            </div>
+            <div class="frm-row">
+                <label>@Loc["address"]</label>
+                <InputTextArea @bind-Value="_model.Address" rows="2" />
+            </div>
+            <div class="frm-row">
+                <label>@Loc["district"]</label>
+                <InputSelect @bind-Value="_model.DistrictId">
+                    <option value="0">-- Select --</option>
+                    @foreach (var d in _districts)
+                    {
+                        <option value="@d.Id">@d.Name</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="frm-row">
+                <label>@Loc["pin_code"]</label>
+                <div>
+                    <InputText @bind-Value="_model.PinCode" maxlength="6" inputmode="numeric"
+                               placeholder="6-digit PIN" />
+                    <ValidationMessage For="@(() => _model.PinCode)" />
+                </div>
+            </div>
+            <div class="frm-row">
+                <label>@Loc["contact_person"]</label>
+                <div>
+                    <InputText @bind-Value="_model.ContactPersonName" maxlength="150" />
+                    <ValidationMessage For="@(() => _model.ContactPersonName)" />
+                </div>
+            </div>
+            <div class="frm-row">
+                <label>@Loc["phone"]</label>
+                <div>
+                    <InputText @bind-Value="_model.Phone" maxlength="12" inputmode="numeric"
+                               placeholder="10–12 digits" />
+                    <ValidationMessage For="@(() => _model.Phone)" />
+                </div>
+            </div>
+            <div class="frm-row">
+                <label>@Loc["mobile"]</label>
+                <div>
+                    <InputText @bind-Value="_model.Mobile" maxlength="10" inputmode="numeric"
+                               placeholder="10-digit mobile" />
+                    <ValidationMessage For="@(() => _model.Mobile)" />
+                </div>
+            </div>
+            <div class="frm-row">
+                <label>@Loc["email"]</label>
+                <div>
+                    <InputText @bind-Value="_model.Email" type="email" maxlength="150"
+                               placeholder="name@example.com" />
+                    <ValidationMessage For="@(() => _model.Email)" />
+                </div>
+            </div>
+            <ValidationSummary />
+        </div>
+
+        <button type="submit" class="btn-step" disabled="@_busy">
+            @(_busy ? "Registering…" : "Register")
+        </button>
+    </EditForm>
+}
+else
+{
+    <div class="credentials-box">
+        <p style="margin:0 0 .4rem;">✅ @_result.Message</p>
+        <div class="frm-row" style="grid-template-columns:auto;">
+            <div>Phone: <strong>@_result.Phone</strong></div>
+            <div>Registration Code: <span class="code">@_result.RegistrationId</span></div>
+        </div>
+        <p class="hint" style="color:#b3261e;">
+            ⚠️ Please save this Registration Code. You will use your <strong>Phone + Code</strong> to login later.
+        </p>
+        @if (_error is not null) { <div class="alert-err">@_error</div> }
+        <button class="btn-step" disabled="@_continuing" @onclick="ContinueToApplication">
+            @(_continuing ? "Please wait…" : "Continue to Application →")
+        </button>
+    </div>
+}
+
+@code {
+    private RegisterRequest _model = new();
+    private List<LookupItem> _districts = new();
+    private RegisterResponse? _result;
+    private string? _error;
+    private bool _busy;
+    private bool _continuing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Loc.OnChange += StateHasChanged;
+        _districts = await Api.GetDistrictsAsync();
+    }
+    public void Dispose() => Loc.OnChange -= StateHasChanged;
+
+    private async Task Submit()
+    {
+        _error = null;
+        if (_model.DistrictId == 0) { _error = "Please select a district."; return; }
+        _busy = true;
+        var res = await Api.RegisterAsync(_model);
+        _busy = false;
+        if (res.Ok) _result = res.Value;
+        else _error = res.Error;
+    }
+
+    // Auto-login with the freshly issued code and go straight into the application wizard.
+    private async Task ContinueToApplication()
+    {
+        if (_result is null) return;
+        _error = null; _continuing = true;
+        var login = await Api.LoginAsync(new LoginRequest { Phone = _result.Phone, RegistrationId = _result.RegistrationId });
+        _continuing = false;
+        if (!login.Ok) { _error = login.Error; return; }
+        await Auth.SignInAsync(login.Value!.Token);
+        Nav.NavigateTo("application/new");   // Step 2: Course / Seat Enhancement
+    }
+}
